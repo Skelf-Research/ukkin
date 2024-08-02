@@ -79,14 +79,26 @@ class _BrowserHomeState extends State<BrowserHome> {
     });
   }
 
-  void _openAIChat() {
+  void _openAIChat({bool withTabContent = false}) async {
+    String? pageContent;
+    if (withTabContent && _tabs.isNotEmpty) {
+      pageContent = await _tabs[_currentTabIndex].controller.runJavaScriptReturningResult(
+        "document.body.innerText"
+      ) as String?;
+    }
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
         child: Container(
           width: MediaQuery.of(context).size.width * 0.8,
           height: MediaQuery.of(context).size.height * 0.8,
-          child: AIChatWindow(tabs: _tabs, downloadService: widget.downloadService, database: widget.database),
+          child: AIChatWindow(
+            tabs: _tabs,
+            downloadService: widget.downloadService,
+            database: widget.database,
+            initialContext: pageContent,
+          ),
         ),
       ),
     );
@@ -225,97 +237,110 @@ class _BrowserHomeState extends State<BrowserHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
+      body: Stack(
         children: [
-          AppBar(
-            title: Text('Ukkin'),
-            actions: [
-              IconButton(
-                icon: Icon(Icons.tab),
-                onPressed: _openTabNavigator,
+          Column(
+            children: [
+              AppBar(
+                title: Text('Ukkin'),
+                actions: [
+                  IconButton(
+                    icon: Icon(Icons.tab),
+                    onPressed: _openTabNavigator,
+                  ),
+                  IconButton(
+                    icon: Icon(_isIncognito ? Icons.visibility_off : Icons.visibility),
+                    onPressed: _toggleIncognito,
+                  ),
+                  IconButton(
+                    icon: Icon(_isLowDataMode ? Icons.data_saver_on : Icons.data_saver_off),
+                    onPressed: _toggleLowDataMode,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.chat),
+                    onPressed: () => _openAIChat(),
+                  ),
+                ],
               ),
-              IconButton(
-                icon: Icon(_isIncognito ? Icons.visibility_off : Icons.visibility),
-                onPressed: _toggleIncognito,
-              ),
-              IconButton(
-                icon: Icon(_isLowDataMode ? Icons.data_saver_on : Icons.data_saver_off),
-                onPressed: _toggleLowDataMode,
-              ),
-              IconButton(
-                icon: Icon(Icons.chat),
-                onPressed: _openAIChat,
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back),
-                  onPressed: () {
-                    if (_tabs.isNotEmpty) {
-                      _tabs[_currentTabIndex].controller.goBack();
-                    }
-                  },
-                ),
-                IconButton(
-                  icon: Icon(Icons.arrow_forward),
-                  onPressed: () {
-                    if (_tabs.isNotEmpty) {
-                      _tabs[_currentTabIndex].controller.goForward();
-                    }
-                  },
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _addressBarController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter URL or search terms',
-                      border: OutlineInputBorder(),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back),
+                      onPressed: () {
+                        if (_tabs.isNotEmpty) {
+                          _tabs[_currentTabIndex].controller.goBack();
+                        }
+                      },
                     ),
-                    onChanged: _updateUrlSuggestions,
-                    onSubmitted: (value) {
-                      _loadUrl(value);
-                      _addressBarController.clear();
+                    IconButton(
+                      icon: Icon(Icons.arrow_forward),
+                      onPressed: () {
+                        if (_tabs.isNotEmpty) {
+                          _tabs[_currentTabIndex].controller.goForward();
+                        }
+                      },
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _addressBarController,
+                        decoration: InputDecoration(
+                          hintText: 'Enter URL or search terms',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: _updateUrlSuggestions,
+                        onSubmitted: (value) {
+                          _loadUrl(value);
+                          _addressBarController.clear();
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.refresh),
+                      onPressed: () {
+                        if (_tabs.isNotEmpty) {
+                          _tabs[_currentTabIndex].controller.reload();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              if (_urlSuggestions.isNotEmpty)
+                Container(
+                  height: 200,
+                  child: ListView.builder(
+                    itemCount: _urlSuggestions.length,
+                    itemBuilder: (context, index) {
+                      return ListTile(
+                        title: Text(_urlSuggestions[index]),
+                        onTap: () {
+                          _loadUrl(_urlSuggestions[index]);
+                          _addressBarController.clear();
+                          setState(() {
+                            _urlSuggestions = [];
+                          });
+                        },
+                      );
                     },
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.refresh),
-                  onPressed: () {
-                    if (_tabs.isNotEmpty) {
-                      _tabs[_currentTabIndex].controller.reload();
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          if (_urlSuggestions.isNotEmpty)
-            Container(
-              height: 200,
-              child: ListView.builder(
-                itemCount: _urlSuggestions.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text(_urlSuggestions[index]),
-                    onTap: () {
-                      _loadUrl(_urlSuggestions[index]);
-                      _addressBarController.clear();
-                      setState(() {
-                        _urlSuggestions = [];
-                      });
-                    },
-                  );
-                },
+              Expanded(
+                child: _tabs.isNotEmpty
+                    ? WebViewWidget(controller: _tabs[_currentTabIndex].controller)
+                    : Center(child: Text('No tabs open')),
               ),
+            ],
+          ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              child: Icon(Icons.psychology),
+              onPressed: () => _openAIChat(withTabContent: true),
+              tooltip: 'Interact with AI',
             ),
-          Expanded(
-            child: _tabs.isNotEmpty
-                ? WebViewWidget(controller: _tabs[_currentTabIndex].controller)
-                : Center(child: Text('No tabs open')),
           ),
         ],
       ),

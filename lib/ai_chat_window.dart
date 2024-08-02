@@ -5,16 +5,20 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'model_download_service.dart';
 import 'package:sqflite/sqflite.dart';
-import 'web_view_model.dart';  // Add this import
-import 'dart:io';
-
+import 'web_view_model.dart';
 
 class AIChatWindow extends StatefulWidget {
   final List<WebViewModel> tabs;
   final ModelDownloadService downloadService;
   final Database database;
+  final String? initialContext;
 
-  AIChatWindow({required this.tabs, required this.downloadService, required this.database});
+  AIChatWindow({
+    required this.tabs,
+    required this.downloadService,
+    required this.database,
+    this.initialContext,
+  });
 
   @override
   _AIChatWindowState createState() => _AIChatWindowState();
@@ -34,6 +38,9 @@ class _AIChatWindowState extends State<AIChatWindow> {
     super.initState();
     _initializeModel();
     _listenToDownloadStatus();
+    if (widget.initialContext != null) {
+      _initializeChat();
+    }
   }
 
   void _listenToDownloadStatus() {
@@ -44,27 +51,27 @@ class _AIChatWindowState extends State<AIChatWindow> {
     });
   }
 
-Future<void> _initializeModel() async {
+  Future<void> _initializeModel() async {
     final appDocDir = await getApplicationDocumentsDirectory();
     _modelPath = '${appDocDir.path}/stablelm-zephyr-3b.Q4_K_M.gguf';
     _mmprojPath = '${appDocDir.path}/stable-lm-3b.mmproj';
     
-    bool modelExists = await File(_modelPath!).exists();
-    bool mmprojExists = await File(_mmprojPath!).exists();
-
-    if (!modelExists || !mmprojExists) {
-      print('Model or mmproj file not found. Initiating download...');
+    if (!await widget.downloadService.checkModelStatus()) {
       widget.downloadService.downloadModel();
-    } else if (!await widget.downloadService.checkModelStatus()) {
-      print('Model status check failed. Reinitiating download...');
-      widget.downloadService.downloadModel();
-    } else {
-      print('Model files found and status check passed.');
     }
   }
 
+  void _initializeChat() {
+    setState(() {
+      _messages.add(ChatMessage(
+        text: "Hello! I'm your AI assistant. I've analyzed the content of your current tab. How can I help you with it?",
+        isUser: false,
+      ));
+    });
+  }
+
   Future<String> _retrieveRelevantContext(String query) async {
-    String tabContent = "";
+    String tabContent = widget.initialContext ?? "";
     String searchContent = "";
 
     // Implement BM25 search using SQLite
@@ -82,10 +89,10 @@ Future<void> _initializeModel() async {
 
       rows.sort((a, b) => (b['rank'] as num).compareTo(a['rank'] as num));
 
-      tabContent = rows.take(3).map((r) => "${r['url']}: ${r['content']}").join("\n\n");
+      tabContent += "\n\n" + rows.take(3).map((r) => "${r['url']}: ${r['content']}").join("\n\n");
     } catch (e) {
       print('Error in BM25 search: $e');
-      tabContent = "Error retrieving context from open tabs.";
+      tabContent += "\nError retrieving context from open tabs.";
     }
     
     // Perform SearXNG search
@@ -108,7 +115,7 @@ Future<void> _initializeModel() async {
       searchContent = "Error retrieving search results.";
     }
     
-    return "Context from open tabs:\n$tabContent\n\nSearch results:\n$searchContent";
+    return "Context from current tab and open tabs:\n$tabContent\n\nSearch results:\n$searchContent";
   }
 
   Future<void> _sendMessage() async {
