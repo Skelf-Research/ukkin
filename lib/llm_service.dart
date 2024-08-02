@@ -29,7 +29,7 @@ class LLMService {
           modelPath: _modelPath!,
           mmprojPath: _mmprojPath!,
           frequencyPenalty: 0.0,
-          presencePenalty: 1.1,
+          presencePenalty: 3.0,
           topP: 1.0,
           contextSize: 2048,
           temperature: 0.7,

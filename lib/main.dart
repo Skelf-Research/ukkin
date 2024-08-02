@@ -30,7 +30,7 @@ class BrowserApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AI-Powered Browser',
+      title: 'Ukkin : Privacy first AI-Browser',
       theme: ThemeData(primarySwatch: Colors.blue, brightness: Brightness.light),
       darkTheme: ThemeData(primarySwatch: Colors.blue, brightness: Brightness.dark),
       themeMode: ThemeMode.system,
