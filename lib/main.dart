@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'model_download_service.dart';
 import 'splash_screen.dart';
+import 'llm_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +18,6 @@ void main() async {
   );
 
   final downloadService = ModelDownloadService();
-
   runApp(BrowserApp(database: database, downloadService: downloadService));
 }
 

@@ -81,11 +81,47 @@ class _BrowserHomeState extends State<BrowserHome> {
 
   void _openAIChat({bool withTabContent = false}) async {
     String? pageContent;
-    if (withTabContent && _tabs.isNotEmpty) {
-      pageContent = await _tabs[_currentTabIndex].controller.runJavaScriptReturningResult(
-        "document.body.innerText"
-      ) as String?;
+if (withTabContent && _tabs.isNotEmpty) {
+  pageContent = await _tabs[_currentTabIndex].controller.runJavaScriptReturningResult('''
+    (function() {
+      // Function to get visible text from an element
+      function getVisibleText(element) {
+        if (element.nodeType === Node.TEXT_NODE) {
+          return element.textContent;
+        }
+        if (element.nodeType !== Node.ELEMENT_NODE) {
+          return '';
+        }
+        var style = window.getComputedStyle(element);
+        if (style && style.display === 'none') {
+          return '';
+        }
+        var text = '';
+        for (var i = 0; i < element.childNodes.length; i++) {
+          text += getVisibleText(element.childNodes[i]);
+        }
+        return text;
+      }
+
+      // Get the page title
+      var title = document.title;
+
+      // Get the main content
+      var content = getVisibleText(document.body);
+
+      // Combine title and content, and trim whitespace
+      return (title + "\\n\\n" + content).trim();
+    })();
+  ''') as String?;
+
+  // Limit the content to a reasonable size (e.g., first 1000 words)
+  if (pageContent != null) {
+    List<String> words = pageContent.split(RegExp(r'\s+'));
+    if (words.length > 1000) {
+      pageContent = words.take(1000).join(' ') + '...';
     }
+  }
+}
 
     showDialog(
       context: context,

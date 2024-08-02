@@ -1,11 +1,12 @@
+// ai_chat_window.dart
 import 'package:flutter/material.dart';
-import 'package:fllama/fllama.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'model_download_service.dart';
 import 'package:sqflite/sqflite.dart';
 import 'web_view_model.dart';
+import 'llm_service.dart';
+import 'package:fllama/fllama.dart';
 
 class AIChatWindow extends StatefulWidget {
   final List<WebViewModel> tabs;
@@ -28,46 +29,26 @@ class _AIChatWindowState extends State<AIChatWindow> {
   final TextEditingController _messageController = TextEditingController();
   final List<ChatMessage> _messages = [];
   final ScrollController _scrollController = ScrollController();
-  String? _modelPath;
-  String? _mmprojPath;
-  String _downloadStatus = '';
-  final String _searxngInstance = 'https://ai-tools-dev.ukkinai.com/searxng'; // Replace with your SearXNG instance URL
+  final String _searxngInstance = 'https://ai-tools-dev.ukkinai.com/searxng';
+  late final LLMService _llmService;
+  bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeModel();
-    _listenToDownloadStatus();
-    if (widget.initialContext != null) {
-      _initializeChat();
-    }
-  }
-
-  void _listenToDownloadStatus() {
-    widget.downloadService.statusStream.listen((status) {
-      setState(() {
-        _downloadStatus = status;
-      });
-    });
-  }
-
-  Future<void> _initializeModel() async {
-    final appDocDir = await getApplicationDocumentsDirectory();
-    _modelPath = '${appDocDir.path}/stablelm-zephyr-3b.Q4_K_M.gguf';
-    _mmprojPath = '${appDocDir.path}/stable-lm-3b.mmproj';
-    
-    if (!await widget.downloadService.checkModelStatus()) {
-      widget.downloadService.downloadModel();
-    }
+    _llmService = widget.downloadService.llmService;
+    _initializeChat();
   }
 
   void _initializeChat() {
-    setState(() {
-      _messages.add(ChatMessage(
-        text: "Hello! I'm your AI assistant. I've analyzed the content of your current tab. How can I help you with it?",
-        isUser: false,
-      ));
-    });
+    if (widget.initialContext != null) {
+      setState(() {
+        _messages.add(ChatMessage(
+          text: "Hello! I'm your AI assistant. I've analyzed the content of your current tab. How can I help you with it?",
+          isUser: false,
+        ));
+      });
+    }
   }
 
   Future<String> _retrieveRelevantContext(String query) async {
@@ -119,11 +100,12 @@ class _AIChatWindowState extends State<AIChatWindow> {
   }
 
   Future<void> _sendMessage() async {
-    if (_messageController.text.isEmpty) return;
+    if (_messageController.text.isEmpty || _isProcessing) return;
 
     final userMessage = _messageController.text;
     setState(() {
       _messages.add(ChatMessage(text: userMessage, isUser: true));
+      _isProcessing = true;
     });
 
     String relevantContext = await _retrieveRelevantContext(userMessage);
@@ -134,32 +116,21 @@ class _AIChatWindowState extends State<AIChatWindow> {
 
     chatHistory.insert(0, Message(Role.system, 'You are a helpful AI assistant integrated into a web browser. Use the following context to answer the user\'s question: $relevantContext'));
 
-    String latestResult = "";
-
-    final request = OpenAiRequest(
-      maxTokens: 256,
-      messages: chatHistory,
-      numGpuLayers: 99,
-      modelPath: _modelPath!,
-      mmprojPath: "",
-      frequencyPenalty: 0.0,
-      presencePenalty: 1.1,
-      topP: 1.0,
-      contextSize: 2048,
-      temperature: 0.7,
-      logger: (log) {
-        print('[llama.cpp] $log');
-      },
-    );
-
-    await fllamaChat(request, (response, done) {
+    try {
+      final response = await _llmService.generateResponse(chatHistory);
       setState(() {
-        latestResult = response;
-        if (done) {
-          _messages.add(ChatMessage(text: latestResult.trim(), isUser: false));
-        }
+        _messages.add(ChatMessage(text: response, isUser: false));
       });
-    });
+    } catch (e) {
+      print('Error generating response: $e');
+      setState(() {
+        _messages.add(ChatMessage(text: "I'm sorry, I encountered an error while processing your request.", isUser: false));
+      });
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
 
     _messageController.clear();
     _scrollToBottom();
@@ -179,24 +150,6 @@ class _AIChatWindowState extends State<AIChatWindow> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.downloadService.isModelReady) {
-      return Scaffold(
-        appBar: AppBar(title: Text('AI Chat')),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 20),
-              Text('Downloading AI model...'),
-              SizedBox(height: 10),
-              Text(_downloadStatus),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(title: Text('AI Chat')),
       body: Column(
@@ -222,12 +175,22 @@ class _AIChatWindowState extends State<AIChatWindow> {
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => _sendMessage(),
+                    enabled: !_isProcessing,
                   ),
                 ),
                 SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _sendMessage,
-                  child: Icon(Icons.send),
+                  onPressed: _isProcessing ? null : _sendMessage,
+                  child: _isProcessing
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Icon(Icons.send),
                 ),
               ],
             ),

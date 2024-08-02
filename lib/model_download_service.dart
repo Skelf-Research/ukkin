@@ -1,8 +1,10 @@
+// model_download_service.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'llm_service.dart';
 
 class ModelDownloadService {
   static final ModelDownloadService _instance = ModelDownloadService._internal();
@@ -17,6 +19,14 @@ class ModelDownloadService {
 
   bool _isModelReady = false;
   bool get isModelReady => _isModelReady;
+
+  LLMService? _llmService;
+  LLMService get llmService {
+    if (_llmService == null) {
+      throw Exception("LLMService not initialized. Ensure model is downloaded.");
+    }
+    return _llmService!;
+  }
 
   Future<void> downloadModel() async {
     if (_isDownloading) return;
@@ -42,6 +52,7 @@ class ModelDownloadService {
         if (message == 'Download completed') {
           _isDownloading = false;
           _isModelReady = true;
+          _initializeLLMService(modelPath, mmprojPath);
           receivePort.close();
         } else if (message.startsWith('Error')) {
           _isDownloading = false;
@@ -51,12 +62,23 @@ class ModelDownloadService {
     });
   }
 
+  Future<void> _initializeLLMService(String modelPath, String mmprojPath) async {
+    _llmService = LLMService();
+    await _llmService!.initialize(modelPath: modelPath, mmprojPath: "");
+    _statusController.add('LLM Service initialized');
+  }
+
   Future<bool> checkModelStatus() async {
     final appDocDir = await getApplicationDocumentsDirectory();
     final modelPath = '${appDocDir.path}/stablelm-zephyr-3b.Q4_K_M.gguf';
     final mmprojPath = '${appDocDir.path}/stable-lm-3b.mmproj';
 
     _isModelReady = await File(modelPath).exists() && await File(mmprojPath).exists();
+    
+    if (_isModelReady && _llmService == null) {
+      await _initializeLLMService(modelPath, mmprojPath);
+    }
+    
     return _isModelReady;
   }
 
@@ -106,5 +128,6 @@ class ModelDownloadService {
 
   void dispose() {
     _statusController.close();
+    _llmService?.dispose();
   }
 }
