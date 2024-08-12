@@ -1,4 +1,3 @@
-// ai_chat_window.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -30,13 +29,19 @@ class _AIChatWindowState extends State<AIChatWindow> {
   final List<ChatMessage> _messages = [];
   final ScrollController _scrollController = ScrollController();
   final String _searxngInstance = 'https://ai-tools-dev.ukkinai.com/searxng';
-  late final LLMService _llmService;
+  LLMService? _llmService;
   bool _isProcessing = false;
+  String _selectedModel = 'Online (OpenAI)';  // Default to online model
+  bool _isLocalModelAvailable = false;
 
   @override
   void initState() {
     super.initState();
     _llmService = widget.downloadService.llmService;
+    _isLocalModelAvailable = _llmService != null;
+    if (_isLocalModelAvailable) {
+      _selectedModel = 'Local';
+    }
     _initializeChat();
   }
 
@@ -51,7 +56,8 @@ class _AIChatWindowState extends State<AIChatWindow> {
     }
   }
 
-  Future<String> _retrieveRelevantContext(String query) async {
+Future<String> _retrieveRelevantContext(String query) async {
+
     String tabContent = widget.initialContext ?? "";
     String searchContent = "";
 
@@ -117,7 +123,12 @@ class _AIChatWindowState extends State<AIChatWindow> {
     chatHistory.insert(0, Message(Role.system, 'You are a helpful AI assistant integrated into a web browser. Use the following context to answer the user\'s question: $relevantContext'));
 
     try {
-      final response = await _llmService.generateResponse(chatHistory);
+      String response;
+      if (_selectedModel == 'Local' && _llmService != null) {
+        response = await _llmService!.generateResponse(chatHistory);
+      } else {
+        response = await _generateOpenAIResponse(chatHistory);
+      }
       setState(() {
         _messages.add(ChatMessage(text: response, isUser: false));
       });
@@ -136,6 +147,33 @@ class _AIChatWindowState extends State<AIChatWindow> {
     _scrollToBottom();
   }
 
+  Future<String> _generateOpenAIResponse(List<Message> chatHistory) async {
+    final apiKey = 'OPENAI_API_KEY';  // Replace with your actual API key
+    final url = Uri.parse('https://api.openai.com/v1/chat/completions');
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: jsonEncode({
+        'model': 'gpt-3.5-turbo',  // or your preferred model
+        'messages': chatHistory.map((msg) => {
+          'role': msg.role.toString().split('.').last,
+          'content': msg.text,
+        }).toList(),
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['choices'][0]['message']['content'];
+    } else {
+      throw Exception('Failed to generate response from OpenAI');
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -151,7 +189,29 @@ class _AIChatWindowState extends State<AIChatWindow> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('AI Chat')),
+      appBar: AppBar(
+        title: Text('AI Chat'),
+        actions: [
+          if (_isLocalModelAvailable)
+            DropdownButton<String>(
+              value: _selectedModel,
+              onChanged: (String? newValue) {
+                setState(() {
+                  _selectedModel = newValue!;
+                });
+              },
+              items: <String>['Local', 'Online (OpenAI)']
+                  .map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+            )
+          else
+            Center(child: Text('Online (OpenAI)', style: TextStyle(color: Colors.white))),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(

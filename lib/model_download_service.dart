@@ -1,4 +1,3 @@
-// model_download_service.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
@@ -21,12 +20,7 @@ class ModelDownloadService {
   bool get isModelReady => _isModelReady;
 
   LLMService? _llmService;
-  LLMService get llmService {
-    if (_llmService == null) {
-      throw Exception("LLMService not initialized. Ensure model is downloaded.");
-    }
-    return _llmService!;
-  }
+  LLMService? get llmService => _llmService;
 
   Future<void> downloadModel() async {
     if (_isDownloading) return;
@@ -56,6 +50,7 @@ class ModelDownloadService {
           receivePort.close();
         } else if (message.startsWith('Error')) {
           _isDownloading = false;
+          _isModelReady = false;
           receivePort.close();
         }
       }
@@ -63,9 +58,16 @@ class ModelDownloadService {
   }
 
   Future<void> _initializeLLMService(String modelPath, String mmprojPath) async {
-    _llmService = LLMService();
-    await _llmService!.initialize(modelPath: modelPath, mmprojPath: "");
-    _statusController.add('LLM Service initialized');
+    try {
+      _llmService = LLMService();
+      await _llmService!.initialize(modelPath: modelPath, mmprojPath: "");
+      _statusController.add('LLM Service initialized');
+      _isModelReady = true;
+    } catch (e) {
+      _statusController.add('Error initializing LLM Service: $e');
+      _llmService = null;
+      _isModelReady = false;
+    }
   }
 
   Future<bool> checkModelStatus() async {
@@ -73,12 +75,13 @@ class ModelDownloadService {
     final modelPath = '${appDocDir.path}/stablelm-zephyr-3b.Q4_K_M.gguf';
     final mmprojPath = '${appDocDir.path}/stable-lm-3b.mmproj';
 
-    _isModelReady = await File(modelPath).exists() && await File(mmprojPath).exists();
+    bool filesExist = await File(modelPath).exists() && await File(mmprojPath).exists();
     
-    if (_isModelReady && _llmService == null) {
+    if (filesExist && _llmService == null) {
       await _initializeLLMService(modelPath, mmprojPath);
     }
     
+    _isModelReady = filesExist && _llmService != null;
     return _isModelReady;
   }
 
