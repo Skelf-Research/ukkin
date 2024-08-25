@@ -1,0 +1,74 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            output-name: linux
+          - os: windows-latest
+            output-name: windows
+          - os: macos-latest
+            output-name: macos
+    
+    steps:
+    - uses: actions/checkout@v3
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.10.0'
+        channel: 'stable'
+    - run: flutter pub get
+    - run: flutter test
+    - run: flutter build ${{ matrix.output-name }} --release
+
+    - name: Upload ${{ matrix.output-name }} Build
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.output-name }}-build
+        path: |
+          build/windows/runner/Release
+          build/linux/x64/release/bundle
+          build/macos/Build/Products/Release
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '11'
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.10.0'
+        channel: 'stable'
+    - run: flutter pub get
+    - run: flutter build apk --release
+    - uses: actions/upload-artifact@v3
+      with:
+        name: android-build
+        path: build/app/outputs/flutter-apk/app-release.apk
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.10.0'
+        channel: 'stable'
+    - run: flutter pub get
+    - run: flutter build ios --release --no-codesign
+    - uses: actions/upload-artifact@v3
+      with:
+        name: ios-build
+        path: build/ios/iphoneos
