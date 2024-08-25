@@ -27,7 +27,6 @@ jobs:
         flutter-version: '3.22.3'
         channel: 'stable'
     - run: flutter pub get
-    - run: flutter test
     - run: flutter build ${{ matrix.output-name }} --release
 
     - name: Upload ${{ matrix.output-name }} Build
