@@ -7,7 +7,6 @@ on:
     branches: [ main ]
 
 jobs:
-
   build-android:
     runs-on: ubuntu-latest
     steps:
@@ -41,3 +40,55 @@ jobs:
       with:
         name: ios-build
         path: build/ios/iphoneos
+
+  create-release:
+    needs: [build-android, build-ios]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          draft: false
+          prerelease: false
+
+      - name: Download Android Build
+        uses: actions/download-artifact@v3
+        with:
+          name: android-build
+
+      - name: Download iOS Build
+        uses: actions/download-artifact@v3
+        with:
+          name: ios-build
+
+      - name: Upload Android Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./app-release.apk
+          asset_name: app-release.apk
+          asset_content_type: application/vnd.android.package-archive
+
+      - name: Zip iOS build
+        run: zip -r ios-build.zip ./build/ios/iphoneos
+
+      - name: Upload iOS Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./ios-build.zip
+          asset_name: ios-build.zip
+          asset_content_type: application/zip
