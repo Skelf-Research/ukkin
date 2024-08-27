@@ -25,11 +25,11 @@ An innovative web browser with integrated AI assistance, built using Flutter and
 1. Ensure you have Flutter installed on your development machine.
 2. Clone this repository:
    ```
-   git clone https://github.com/yourusername/ai-powered-browser.git
+   git clone https://github.com/terraprompt/ukkin.git
    ```
 3. Navigate to the project directory:
    ```
-   cd ai-powered-browser
+   cd ukkin
    ```
 4. Install dependencies:
    ```
