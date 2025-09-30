@@ -1,0 +1,97 @@
+name: mobile_agent_sdk
+description: A comprehensive Flutter SDK for building intelligent mobile AI assistants with multi-agent coordination, voice processing, computer vision, and app integration capabilities.
+version: 1.0.0
+homepage: https://github.com/yourusername/mobile_agent_sdk
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+  flutter: ">=3.1.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Core dependencies
+  meta: ^1.9.1
+  collection: ^1.17.2
+
+  # Platform integration
+  shared_preferences: ^2.2.0
+  path_provider: ^2.1.0
+  permission_handler: ^11.0.0
+
+  # Networking
+  http: ^1.1.0
+  dio: ^5.3.0
+
+  # Database
+  sqflite: ^2.3.0
+  sqlite3: ^2.1.0
+
+  # Voice processing (optional)
+  speech_to_text: ^6.3.0
+  flutter_tts: ^3.8.0
+
+  # Image processing (optional)
+  image: ^4.1.0
+  camera: ^0.10.5
+  image_picker: ^1.0.4
+
+  # Utilities
+  logger: ^2.0.0
+  uuid: ^4.0.0
+  crypto: ^3.0.3
+
+  # JSON serialization
+  json_annotation: ^4.8.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+  # Code generation
+  build_runner: ^2.4.6
+  json_serializable: ^6.7.1
+
+  # Testing
+  mockito: ^5.4.2
+  test: ^1.24.0
+
+flutter:
+  uses-material-design: true
+
+  # Plugin configuration
+  plugin:
+    platforms:
+      android:
+        package: com.example.mobile_agent_sdk
+        pluginClass: MobileAgentSdkPlugin
+      ios:
+        pluginClass: MobileAgentSdkPlugin
+
+# Documentation and metadata
+topics:
+  - ai
+  - assistant
+  - mobile
+  - agents
+  - voice
+  - vision
+  - automation
+  - flutter
+
+screenshots:
+  - description: 'Agent Chat Interface'
+    path: screenshots/chat_interface.png
+  - description: 'Voice Integration'
+    path: screenshots/voice_features.png
+  - description: 'Visual Analysis'
+    path: screenshots/vision_features.png
+
+funding:
+  - https://github.com/sponsors/yourusername
+
+repository: https://github.com/yourusername/mobile_agent_sdk
+issue_tracker: https://github.com/yourusername/mobile_agent_sdk/issues
+documentation: https://mobile-agent-sdk.dev/docs

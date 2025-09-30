@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'model_download_service.dart';
 import 'setup_screen.dart';
@@ -6,10 +7,9 @@ import 'browser_home.dart';
 import 'package:sqflite/sqflite.dart';
 
 class SplashScreen extends StatefulWidget {
-  final ModelDownloadService downloadService;
   final Database database;
 
-  SplashScreen({required this.downloadService, required this.database});
+  SplashScreen({required this.database});
 
   @override
   _SplashScreenState createState() => _SplashScreenState();
@@ -33,11 +33,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (isFirstTime) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => SetupScreen(downloadService: widget.downloadService, database: widget.database)),
+        MaterialPageRoute(builder: (context) => SetupScreen(database: widget.database)),
       );
     } else {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => BrowserHome(downloadService: widget.downloadService, database: widget.database)),
+        MaterialPageRoute(builder: (context) => BrowserHome(database: widget.database)),
       );
     }
   }

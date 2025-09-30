@@ -1,17 +1,15 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
+import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'llm_service.dart';
+import 'config.dart';
+import 'exceptions.dart';
 
-class ModelDownloadService {
-  static final ModelDownloadService _instance = ModelDownloadService._internal();
-  factory ModelDownloadService() => _instance;
-  ModelDownloadService._internal();
-
-  final _statusController = StreamController<String>.broadcast();
-  Stream<String> get statusStream => _statusController.stream;
+class ModelDownloadService with ChangeNotifier {
+  String _downloadStatus = '';
+  String get downloadStatus => _downloadStatus;
 
   bool _isDownloading = false;
   bool get isDownloading => _isDownloading;
@@ -22,115 +20,128 @@ class ModelDownloadService {
   LLMService? _llmService;
   LLMService? get llmService => _llmService;
 
+  String getHuggingFaceUrl(
+      {required String repoId, required String filename, String? revision, String? subfolder}) {
+    const String defaultEndpoint = 'https://huggingface.co';
+    const String defaultRevision = 'main';
+    final String encodedRevision = Uri.encodeComponent(revision ?? defaultRevision);
+    final String encodedFilename = Uri.encodeComponent(filename);
+    final String? encodedSubfolder = subfolder != null ? Uri.encodeComponent(subfolder) : null;
+    final String fullPath = encodedSubfolder != null ? '$encodedSubfolder/$encodedFilename' : encodedFilename;
+    final String url = '$defaultEndpoint/$repoId/resolve/$encodedRevision/$fullPath';
+    return url;
+  }
+
+  Future<String> getModelPath() async {
+    final appDocDir = await getApplicationDocumentsDirectory();
+    return '${appDocDir.path}/${ModelConfig.filename}';
+  }
+
+  Future<bool> isModelDownloaded() async {
+    try {
+      final modelPath = await getModelPath();
+      return await File(modelPath).exists();
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<void> downloadModel() async {
     if (_isDownloading) return;
     _isDownloading = true;
+    _updateStatus('Starting download...');
 
-    final appDocDir = await getApplicationDocumentsDirectory();
-    final modelPath = '${appDocDir.path}/stablelm-zephyr-3b.Q4_K_M.gguf';
-    final mmprojPath = '${appDocDir.path}/stable-lm-3b.mmproj';
+    try {
+      final modelPath = await getModelPath();
 
-    final receivePort = ReceivePort();
-    await Isolate.spawn(
-      _downloadModelIsolate, 
-      {
-        'sendPort': receivePort.sendPort,
-        'modelPath': modelPath,
-        'mmprojPath': mmprojPath,
+      if (await isModelDownloaded()) {
+        _updateStatus('Model already downloaded');
+        await _initializeLLMService(modelPath);
+        return;
       }
-    );
 
-    receivePort.listen((message) {
-      if (message is String) {
-        _statusController.add(message);
-        if (message == 'Download completed') {
-          _isDownloading = false;
-          _isModelReady = true;
-          _initializeLLMService(modelPath, mmprojPath);
-          receivePort.close();
-        } else if (message.startsWith('Error')) {
-          _isDownloading = false;
-          _isModelReady = false;
-          receivePort.close();
-        }
+      final url = getHuggingFaceUrl(repoId: ModelConfig.repoId, filename: ModelConfig.filename);
+
+      _updateStatus('Downloading model...');
+      final response = await http.get(Uri.parse(url)).timeout(Duration(minutes: 5));
+
+      if (response.statusCode != 200) {
+        throw ModelDownloadException('Failed to download model: ${response.statusCode}');
       }
-    });
+
+      final file = File(modelPath);
+      final totalBytes = int.parse(response.headers['content-length'] ?? '0');
+      int receivedBytes = 0;
+
+      final sink = file.openWrite();
+      final bytes = response.bodyBytes;
+      final chunkSize = 1024 * 8; // 8KB chunks
+
+      for (var i = 0; i < bytes.length; i += chunkSize) {
+        final end = (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
+        final chunk = bytes.sublist(i, end);
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        final progress = (receivedBytes / totalBytes * 100).toStringAsFixed(2);
+        _updateStatus('Downloading: $progress%');
+      }
+
+      await sink.close();
+      _updateStatus('Download completed');
+      await _initializeLLMService(modelPath);
+    } on SocketException {
+      _updateStatus('Error: No internet connection');
+    } on FileSystemException {
+      _updateStatus('Error: Not enough storage space');
+    } on TimeoutException {
+      _updateStatus('Error: Download timed out');
+    } on ModelDownloadException catch (e) {
+      _updateStatus('Error: $e');
+    } catch (e) {
+      _updateStatus('An unknown error occurred: $e');
+    } finally {
+      _isDownloading = false;
+      notifyListeners();
+    }
   }
 
-  Future<void> _initializeLLMService(String modelPath, String mmprojPath) async {
+  Future<void> _initializeLLMService(String modelPath) async {
     try {
       _llmService = LLMService();
-      await _llmService!.initialize(modelPath: modelPath, mmprojPath: "");
-      _statusController.add('LLM Service initialized');
+      await _llmService!.initialize(modelPath: modelPath);
+      _updateStatus('LLM Service initialized');
       _isModelReady = true;
     } catch (e) {
-      _statusController.add('Error initializing LLM Service: $e');
+      _updateStatus('Error initializing LLM Service: $e');
       _llmService = null;
       _isModelReady = false;
+    } finally {
+      notifyListeners();
     }
   }
 
   Future<bool> checkModelStatus() async {
-    final appDocDir = await getApplicationDocumentsDirectory();
-    final modelPath = '${appDocDir.path}/stablelm-zephyr-3b.Q4_K_M.gguf';
-    final mmprojPath = '${appDocDir.path}/stable-lm-3b.mmproj';
-
-    bool filesExist = await File(modelPath).exists() && await File(mmprojPath).exists();
-    
-    if (filesExist && _llmService == null) {
-      await _initializeLLMService(modelPath, mmprojPath);
+    if (await isModelDownloaded()) {
+      final modelPath = await getModelPath();
+      if (_llmService == null) {
+        await _initializeLLMService(modelPath);
+      }
+      _isModelReady = _llmService != null;
+    } else {
+      _isModelReady = false;
     }
-    
-    _isModelReady = filesExist && _llmService != null;
+    notifyListeners();
     return _isModelReady;
   }
 
-  static void _downloadModelIsolate(Map<String, dynamic> args) async {
-    final SendPort sendPort = args['sendPort'];
-    final String modelPath = args['modelPath'];
-    final String mmprojPath = args['mmprojPath'];
-
-    try {
-      await _downloadFile(
-        'https://huggingface.co/telosnex/fllama/resolve/main/stablelm-zephyr-3b.Q4_K_M.gguf',
-        modelPath,
-        sendPort,
-      );
-      await _downloadFile(
-        'https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/main/pytorch_model.bin',
-        mmprojPath,
-        sendPort,
-      );
-      sendPort.send('Download completed');
-    } catch (e) {
-      sendPort.send('Error during download: $e');
-    }
+  void _updateStatus(String status) {
+    _downloadStatus = status;
+    notifyListeners();
   }
 
-  static Future<void> _downloadFile(String url, String savePath, SendPort sendPort) async {
-    final response = await http.get(Uri.parse(url));
-    final file = File(savePath);
-    final totalBytes = int.parse(response.headers['content-length'] ?? '0');
-    int receivedBytes = 0;
-
-    final sink = file.openWrite();
-    final bytes = response.bodyBytes;
-    final chunkSize = 1024 * 8; // 8KB chunks
-
-    for (var i = 0; i < bytes.length; i += chunkSize) {
-      final end = (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
-      final chunk = bytes.sublist(i, end);
-      sink.add(chunk);
-      receivedBytes += chunk.length;
-      final progress = (receivedBytes / totalBytes * 100).toStringAsFixed(2);
-      sendPort.send('Downloading: $progress%');
-    }
-
-    await sink.close();
-  }
-
+  @override
   void dispose() {
-    _statusController.close();
     _llmService?.dispose();
+    super.dispose();
   }
 }

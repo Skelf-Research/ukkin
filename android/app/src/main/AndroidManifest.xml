@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Voice input permissions -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Query for speech recognition services -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:label="browserai"
         android:name="${applicationName}"

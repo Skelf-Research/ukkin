@@ -1,127 +1,101 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'model_download_service.dart';
 import 'ai_chat_window.dart';
 import 'package:sqflite/sqflite.dart';
-import 'web_view_model.dart';
+import 'browser_state.dart';
 
-class BrowserHome extends StatefulWidget {
-  final ModelDownloadService downloadService;
+class BrowserHome extends StatelessWidget {
   final Database database;
 
-  BrowserHome({required this.downloadService, required this.database});
+  BrowserHome({required this.database});
 
   @override
-  _BrowserHomeState createState() => _BrowserHomeState();
-}
+  Widget build(BuildContext context) {
+    final browserState = Provider.of<BrowserState>(context);
+    final addressBarController = TextEditingController(text: browserState.currentTab.url);
 
-class _BrowserHomeState extends State<BrowserHome> {
-  List<WebViewModel> _tabs = [];
-  int _currentTabIndex = 0;
-  bool _isIncognito = false;
-  bool _isLowDataMode = false;
-  TextEditingController _addressBarController = TextEditingController();
-  List<String> _urlSuggestions = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _addNewTab();
-    widget.downloadService.checkModelStatus().then((isReady) {
-      if (!isReady) {
-        widget.downloadService.downloadModel();
-      }
-    });
+    return Scaffold(
+      appBar: AppBar(
+        title: TextField(
+          controller: addressBarController,
+          decoration: InputDecoration(
+            hintText: 'Search or type URL',
+            border: InputBorder.none,
+          ),
+          onSubmitted: (value) {
+            _loadUrl(browserState.currentTab.controller, value);
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.menu),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: browserState.tabs.isNotEmpty
+          ? WebViewWidget(controller: browserState.currentTab.controller)
+          : Center(child: Text('No tabs open')),
+      bottomNavigationBar: BottomAppBar(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            IconButton(
+              icon: Icon(Icons.arrow_back),
+              onPressed: () {
+                if (browserState.tabs.isNotEmpty) {
+                  browserState.currentTab.controller.goBack();
+                }
+              },
+            ),
+            IconButton(
+              icon: Icon(Icons.arrow_forward),
+              onPressed: () {
+                if (browserState.tabs.isNotEmpty) {
+                  browserState.currentTab.controller.goForward();
+                }
+              },
+            ),
+            IconButton(
+              icon: Icon(Icons.refresh),
+              onPressed: () {
+                if (browserState.tabs.isNotEmpty) {
+                  browserState.currentTab.controller.reload();
+                }
+              },
+            ),
+            IconButton(
+              icon: Icon(Icons.tab),
+              onPressed: () => _openTabNavigator(context, browserState),
+            ),
+            IconButton(
+              icon: Icon(Icons.chat_bubble_outline),
+              onPressed: () => _openAIChat(context, browserState, database),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  @override
-  void dispose() {
-    _addressBarController.dispose();
-    for (var tab in _tabs) {
-      tab.cleanup();
+  void _loadUrl(WebViewController controller, String url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (url.contains('.')) {
+        url = 'http://$url';
+      } else {
+        url = 'https://duckduckgo.com/?q=${Uri.encodeComponent(url)}';
+      }
     }
-    _tabs.clear();
-    super.dispose();
+    controller.loadRequest(Uri.parse(url));
   }
 
-  void _addNewTab({String url = 'https://www.google.com'}) {
-    setState(() {
-      _tabs.add(WebViewModel(url: url, isIncognito: _isIncognito));
-      _currentTabIndex = _tabs.length - 1;
-    });
-  }
-
-  void _closeTab(int index) {
-    setState(() {
-      _tabs.removeAt(index);
-      if (_currentTabIndex >= _tabs.length) {
-        _currentTabIndex = _tabs.length - 1;
-      }
-    });
-  }
-
-  void _switchToTab(int index) {
-    setState(() {
-      _currentTabIndex = index;
-    });
-    Navigator.pop(context); // Close the tab gallery
-  }
-
-  void _toggleIncognito() {
-    setState(() {
-      _isIncognito = !_isIncognito;
-    });
-  }
-
-  void _toggleLowDataMode() {
-    setState(() {
-      _isLowDataMode = !_isLowDataMode;
-    });
-  }
-
-  void _openAIChat({bool withTabContent = false}) async {
+  void _openAIChat(BuildContext context, BrowserState browserState, Database database) async {
     String? pageContent;
-if (withTabContent && _tabs.isNotEmpty) {
-  pageContent = await _tabs[_currentTabIndex].controller.runJavaScriptReturningResult('''
-    (function() {
-      // Function to get visible text from an element
-      function getVisibleText(element) {
-        if (element.nodeType === Node.TEXT_NODE) {
-          return element.textContent;
-        }
-        if (element.nodeType !== Node.ELEMENT_NODE) {
-          return '';
-        }
-        var style = window.getComputedStyle(element);
-        if (style && style.display === 'none') {
-          return '';
-        }
-        var text = '';
-        for (var i = 0; i < element.childNodes.length; i++) {
-          text += getVisibleText(element.childNodes[i]);
-        }
-        return text;
-      }
-
-      // Get the page title
-      var title = document.title;
-
-      // Get the main content
-      var content = getVisibleText(document.body);
-
-      // Combine title and content, and trim whitespace
-      return (title + "\\n\\n" + content).trim();
-    })();
-  ''') as String?;
-
-  // Limit the content to a reasonable size (e.g., first 1000 words)
-  if (pageContent != null) {
-    List<String> words = pageContent.split(RegExp(r'\s+'));
-    if (words.length > 1000) {
-      pageContent = words.take(1000).join(' ') + '...';
+    if (browserState.tabs.isNotEmpty) {
+      pageContent = await browserState.currentTab.controller.runJavaScriptReturningResult('document.body.innerText') as String?;
     }
-  }
-}
 
     showDialog(
       context: context,
@@ -130,9 +104,9 @@ if (withTabContent && _tabs.isNotEmpty) {
           width: MediaQuery.of(context).size.width * 0.8,
           height: MediaQuery.of(context).size.height * 0.8,
           child: AIChatWindow(
-            tabs: _tabs,
-            downloadService: widget.downloadService,
-            database: widget.database,
+            tabs: browserState.tabs,
+            downloadService: Provider.of<ModelDownloadService>(context, listen: false),
+            database: database,
             initialContext: pageContent,
           ),
         ),
@@ -140,288 +114,74 @@ if (withTabContent && _tabs.isNotEmpty) {
     );
   }
 
-  void _openTabNavigator() {
-    showModalBottomSheet(
+  void _openTabNavigator(BuildContext context, BrowserState browserState) {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (BuildContext context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.9,
-          minChildSize: 0.5,
-          maxChildSize: 0.9,
-          builder: (BuildContext context, ScrollController scrollController) {
-            return Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  AppBar(
-                    title: Text('Tabs'),
-                    actions: [
-                      IconButton(
-                        icon: Icon(Icons.add),
-                        onPressed: () {
-                          _addNewTab();
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ],
-                  ),
-                  Expanded(
-                    child: GridView.builder(
-                      controller: scrollController,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.75,
-                      ),
-                      itemCount: _tabs.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        return GestureDetector(
-                          onTap: () => _switchToTab(index),
-                          child: Card(
-                            child: Column(
-                              children: [
-                                Expanded(
-                                  child: Stack(
-                                    children: [
-                                      Image.network(
-                                        _tabs[index].thumbnailUrl ?? 'https://via.placeholder.com/150?text=No+Thumbnail',
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                      ),
-                                      Positioned(
-                                        top: 0,
-                                        right: 0,
-                                        child: IconButton(
-                                          icon: Icon(Icons.close),
-                                          onPressed: () => _closeTab(index),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    _tabs[index].title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _addToHistory(String url, String title) async {
-    if (!_isIncognito) {
-      await widget.database.insert(
-        'history',
-        {
-          'url': url,
-          'title': title,
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-  }
-
-  void _loadUrl(String url) {
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      if (Uri.tryParse(url)?.hasScheme ?? false) {
-        url = 'http://$url';
-      } else {
-        url = 'https://duckduckgo.com/?q=${Uri.encodeComponent(url)}';
-      }
-    }
-    _tabs[_currentTabIndex].controller.loadRequest(Uri.parse(url));
-  }
-
-  void _updateUrlSuggestions(String input) async {
-    if (input.isEmpty) {
-      setState(() {
-        _urlSuggestions = [];
-      });
-      return;
-    }
-
-    final results = await widget.database.query(
-      'history',
-      where: 'url LIKE ? OR title LIKE ?',
-      whereArgs: ['%$input%', '%$input%'],
-      orderBy: 'timestamp DESC',
-      limit: 5,
-    );
-
-    setState(() {
-      _urlSuggestions = results.map((e) => e['url'] as String).toList();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          Column(
+      builder: (context) => Dialog(
+        child: Container(
+          child: Column(
             children: [
               AppBar(
-                title: Text('Ukkin'),
+                title: Text('Tabs'),
                 actions: [
                   IconButton(
-                    icon: Icon(Icons.tab),
-                    onPressed: _openTabNavigator,
-                  ),
-                  IconButton(
-                    icon: Icon(_isIncognito ? Icons.visibility_off : Icons.visibility),
-                    onPressed: _toggleIncognito,
-                  ),
-                  IconButton(
-                    icon: Icon(_isLowDataMode ? Icons.data_saver_on : Icons.data_saver_off),
-                    onPressed: _toggleLowDataMode,
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.chat),
-                    onPressed: () => _openAIChat(),
+                    icon: Icon(Icons.add),
+                    onPressed: () {
+                      browserState.addNewTab();
+                      Navigator.pop(context);
+                    },
                   ),
                 ],
               ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back),
-                      onPressed: () {
-                        if (_tabs.isNotEmpty) {
-                          _tabs[_currentTabIndex].controller.goBack();
-                        }
-                      },
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.arrow_forward),
-                      onPressed: () {
-                        if (_tabs.isNotEmpty) {
-                          _tabs[_currentTabIndex].controller.goForward();
-                        }
-                      },
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _addressBarController,
-                        decoration: InputDecoration(
-                          hintText: 'Enter URL or search terms',
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: _updateUrlSuggestions,
-                        onSubmitted: (value) {
-                          _loadUrl(value);
-                          _addressBarController.clear();
-                        },
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.refresh),
-                      onPressed: () {
-                        if (_tabs.isNotEmpty) {
-                          _tabs[_currentTabIndex].controller.reload();
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              if (_urlSuggestions.isNotEmpty)
-                Container(
-                  height: 200,
-                  child: ListView.builder(
-                    itemCount: _urlSuggestions.length,
-                    itemBuilder: (context, index) {
-                      return ListTile(
-                        title: Text(_urlSuggestions[index]),
-                        onTap: () {
-                          _loadUrl(_urlSuggestions[index]);
-                          _addressBarController.clear();
-                          setState(() {
-                            _urlSuggestions = [];
-                          });
-                        },
-                      );
-                    },
-                  ),
-                ),
               Expanded(
-                child: _tabs.isNotEmpty
-                    ? WebViewWidget(controller: _tabs[_currentTabIndex].controller)
-                    : Center(child: Text('No tabs open')),
+                child: GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.75,
+                  ),
+                  itemCount: browserState.tabs.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    return GestureDetector(
+                      onTap: () => browserState.switchToTab(index),
+                      child: Card(
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: Center(child: Text(browserState.tabs[index].title.isNotEmpty ? browserState.tabs[index].title[0] : 'N')),
+                                  ),
+                                  Positioned(
+                                    top: 0,
+                                    right: 0,
+                                    child: IconButton(
+                                      icon: Icon(Icons.close),
+                                      onPressed: () => browserState.closeTab(index),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                browserState.tabs[index].title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
           ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: FloatingActionButton(
-              child: Icon(Icons.psychology),
-              onPressed: () => _openAIChat(withTabContent: true),
-              tooltip: 'Interact with AI',
-            ),
-          ),
-        ],
+        ),
       ),
     );
-  }
-}
-
-class BrowserWebView extends StatefulWidget {
-  final WebViewModel tab;
-  final bool isLowDataMode;
-  final Function(String, String) onPageFinished;
-
-  BrowserWebView({
-    required this.tab,
-    required this.isLowDataMode,
-    required this.onPageFinished,
-  });
-
-  @override
-  _BrowserWebViewState createState() => _BrowserWebViewState();
-}
-
-class _BrowserWebViewState extends State<BrowserWebView> {
-  @override
-  void initState() {
-    super.initState();
-    widget.tab.controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (String url) async {
-            final title = await widget.tab.controller.getTitle() ?? 'No Title';
-            widget.tab.title = title;
-            widget.onPageFinished(url, title);
-            // Set a placeholder thumbnail URL
-            widget.tab.thumbnailUrl = 'https://via.placeholder.com/150?text=${Uri.encodeComponent(title)}';
-            setState(() {}); // Trigger a rebuild to update the UI
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.tab.url));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return WebViewWidget(controller: widget.tab.controller);
   }
 }
