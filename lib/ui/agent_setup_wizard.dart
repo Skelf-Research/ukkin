@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
-import 'package:agentlib/agentlib.dart';
+import 'package:flutter/material.dart' hide TimeOfDay;
+import 'package:flutter/material.dart' as flutter show TimeOfDay;
 
 /// Wizard for setting up different types of agents
 class AgentSetupWizard extends StatefulWidget {
@@ -1064,7 +1064,7 @@ class _AgentSetupWizardState extends State<AgentSetupWizard> {
   void _selectTime() async {
     final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: flutter.TimeOfDay.now(),
     );
 
     if (time != null) {

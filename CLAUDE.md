@@ -126,10 +126,58 @@ import 'package:agentlib/src/agents/repetitive_task_agent.dart' show TaskResult;
 
 ### Code Organization
 - **lib/ui/**: Core UI components (4 main files: dashboard, detail, wizard, conversational builder)
-- **lib/agent/**: Legacy agent implementation (being migrated to AgentLib)
+- **lib/agent/**: Agent implementation with tools, security, and mobile automation
+- **lib/config/**: Configuration system (AppConfig, ConfigManager, SettingsScreen)
+- **lib/mobile/**: Mobile-specific services (notifications, quick actions)
 - **lib/voice/**: Voice interaction and speech processing
 - **lib/vlm/**: Computer vision and visual processing
 - **lib/integrations/**: App-specific automation modules
+
+### Configuration System
+```dart
+// Access configuration
+final config = ConfigManager.instance.config;
+
+// Update configuration sections
+await ConfigManager.instance.updateModel(
+  config.model.copyWith(temperature: 0.8),
+);
+
+// Export/Import
+final exportString = config.toExportString();
+await ConfigManager.instance.importFromString(jsonString);
+```
+
+### Security Services
+```dart
+// Encryption
+final encrypted = await EncryptionService().encrypt(sensitiveData);
+final decrypted = await EncryptionService().decrypt(encrypted);
+
+// Biometric authentication
+final result = await BiometricAuth().authenticate(
+  reason: 'Confirm agent action',
+  allowDeviceCredential: true,
+);
+```
+
+### Platform Capabilities (iOS Graceful Degradation)
+```dart
+// Check capabilities before automation
+final caps = await AutomationService().getCapabilities();
+if (caps.canPerformTaps) {
+  await automation.clickOnText('Button');
+} else if (caps.canUseShortcuts) {
+  await automation.triggerShortcut('My Shortcut');
+}
+
+// Platform-aware execution
+final result = await automation.executeWithFallback(
+  action: 'launch',
+  target: 'com.example.app',
+  urlScheme: 'example://', // iOS fallback
+);
+```
 
 ### Performance Considerations
 - **On-Device Processing**: All AI computation happens locally

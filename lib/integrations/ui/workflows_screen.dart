@@ -164,7 +164,7 @@ class _WorkflowsScreenState extends State<WorkflowsScreen> {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: Colors.blue[100],
-          child: Icon(Icons.template_outlined, color: Colors.blue[600]),
+          child: Icon(Icons.description_outlined, color: Colors.blue[600]),
         ),
         title: Text(template.name),
         subtitle: Text(template.description),

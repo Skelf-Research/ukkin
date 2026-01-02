@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:agentlib/agentlib.dart';
+// Hide types that conflict with local definitions
+import 'package:agentlib/agentlib.dart' hide SessionManager, SessionStatus, AgentMessage, TaskStatus, MessageType, PlatformManager, WorkflowBuilder;
+import 'package:agentlib/agentlib.dart' as agentlib show AgentMessage, MessageType;
 import 'dart:async';
 
 import 'task_session.dart';
@@ -14,6 +15,57 @@ import 'integrations/workflow_builder.dart';
 import 'integrations/ui/app_integrations_screen.dart';
 import 'integrations/ui/workflows_screen.dart';
 import 'integrations/ui/performance_settings_screen.dart';
+import 'agent/models/agent_message.dart';
+import 'agent/models/task.dart';
+
+// Helper to convert local AgentMessage to agentlib's AgentMessage
+agentlib.AgentMessage _toAgentlibMessage(AgentMessage msg) {
+  return agentlib.AgentMessage(
+    id: msg.id,
+    agentId: msg.agentId,
+    type: _toAgentlibMessageType(msg.type),
+    content: msg.content,
+    timestamp: msg.timestamp,
+    metadata: msg.metadata,
+  );
+}
+
+// Helper to convert agentlib's AgentMessage to local AgentMessage
+AgentMessage _fromAgentlibMessage(agentlib.AgentMessage msg) {
+  return AgentMessage(
+    id: msg.id,
+    agentId: msg.agentId ?? 'unknown',
+    type: _fromAgentlibMessageType(msg.type),
+    content: msg.content,
+    timestamp: msg.timestamp,
+    metadata: msg.metadata ?? {},
+  );
+}
+
+// agentlib MessageType: user, agent, system, error, command
+// ukkin MessageType: user, agent, system, status, error, response, learning, tool
+MessageType _fromAgentlibMessageType(agentlib.MessageType type) {
+  switch (type) {
+    case agentlib.MessageType.user: return MessageType.user;
+    case agentlib.MessageType.agent: return MessageType.agent;
+    case agentlib.MessageType.system: return MessageType.system;
+    case agentlib.MessageType.error: return MessageType.error;
+    case agentlib.MessageType.command: return MessageType.tool;
+  }
+}
+
+agentlib.MessageType _toAgentlibMessageType(MessageType type) {
+  switch (type) {
+    case MessageType.user: return agentlib.MessageType.user;
+    case MessageType.agent: return agentlib.MessageType.agent;
+    case MessageType.system: return agentlib.MessageType.system;
+    case MessageType.error: return agentlib.MessageType.error;
+    case MessageType.status: return agentlib.MessageType.system;
+    case MessageType.response: return agentlib.MessageType.agent;
+    case MessageType.learning: return agentlib.MessageType.system;
+    case MessageType.tool: return agentlib.MessageType.command;
+  }
+}
 
 class AIAssistantHome extends StatefulWidget {
   final String agentId;
@@ -745,10 +797,11 @@ class _AIAssistantHomeState extends State<AIAssistantHome> with TickerProviderSt
             _currentSession!.addMessage(responseMessage);
           });
         } else {
-          final response = await _agent!.processMessage(userMessage);
+          final agentlibMessage = _toAgentlibMessage(userMessage);
+          final response = await _agent!.processMessage(agentlibMessage);
           setState(() {
             _isTyping = false;
-            _currentSession!.addMessage(response);
+            _currentSession!.addMessage(_fromAgentlibMessage(response));
           });
         }
       }
@@ -1080,16 +1133,6 @@ class _AIAssistantHomeState extends State<AIAssistantHome> with TickerProviderSt
             enableProactiveHelp: true,
             enableAccessibilityAssist: true,
             enableContextAwareness: true,
-            onHelpSuggestion: (suggestion) {
-              // Add suggestion to chat
-              _sendMessage("Visual Assistant suggests: $suggestion");
-            },
-            onAccessibilityIssue: (issue) {
-              _sendMessage("Accessibility issue detected: $issue");
-            },
-            onFormDetected: (formType) {
-              _sendMessage("Form detected: $formType. Would you like help filling it?");
-            },
           ),
         ),
       ),
@@ -1110,12 +1153,8 @@ class _AIAssistantHomeState extends State<AIAssistantHome> with TickerProviderSt
             enableObjectDetection: true,
             enableTextExtraction: true,
             enableSemanticAnalysis: true,
-            enableSmartCropping: true,
             onAnalysisComplete: (result) {
               _sendMessage("Image analysis: ${result.description}");
-              if (result.detectedObjects.isNotEmpty) {
-                _sendMessage("Found objects: ${result.detectedObjects.map((e) => e.label).join(', ')}");
-              }
               if (result.extractedText.isNotEmpty) {
                 _sendMessage("Extracted text: ${result.extractedText}");
               }

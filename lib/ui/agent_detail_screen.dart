@@ -213,7 +213,7 @@ class _AgentDetailScreenState extends State<AgentDetailScreen> {
           _buildStatItem(
             icon: Icons.description,
             label: 'Description',
-            value: widget.agent.description,
+            value: 'Automated ${widget.agent.name.toLowerCase()} tasks',
             color: const Color(0xFF6B7280),
             fullWidth: true,
           ),

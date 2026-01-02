@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Browserai</string>
+	<string>Ukkin</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,5 +45,27 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>shortcuts</string>
+		<string>googlechrome</string>
+		<string>googlegmail</string>
+		<string>comgooglemaps</string>
+		<string>youtube</string>
+		<string>instagram</string>
+		<string>twitter</string>
+		<string>whatsapp</string>
+		<string>spotify</string>
+		<string>slack</string>
+		<string>msteams</string>
+		<string>zoomus</string>
+		<string>linkedin</string>
+		<string>fb</string>
+		<string>mailto</string>
+		<string>sms</string>
+		<string>tel</string>
+		<string>facetime</string>
+		<string>maps</string>
+	</array>
 </dict>
 </plist>

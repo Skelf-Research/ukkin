@@ -3,13 +3,14 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  battery_plus
+  connectivity_plus
   file_selector_windows
   flutter_tts
   permission_handler_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
-  fllama
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

@@ -259,6 +259,51 @@ class AppAutomationTool extends Tool with ToolValidation {
     }
   }
 
+  /// Maps common app names to their Android package names
+  static const Map<String, String> _appPackageMap = {
+    'whatsapp': 'com.whatsapp',
+    'telegram': 'org.telegram.messenger',
+    'gmail': 'com.google.android.gm',
+    'email': 'com.google.android.gm',
+    'chrome': 'com.android.chrome',
+    'browser': 'com.android.chrome',
+    'instagram': 'com.instagram.android',
+    'youtube': 'com.google.android.youtube',
+    'spotify': 'com.spotify.music',
+    'music': 'com.spotify.music',
+    'camera': 'com.android.camera2',
+    'uber': 'com.ubercab',
+    'lyft': 'com.lyft.android',
+    'doordash': 'com.dd.doordash',
+    'ubereats': 'com.ubercab.eats',
+    'settings': 'com.android.settings',
+    'maps': 'com.google.android.apps.maps',
+    'twitter': 'com.twitter.android',
+    'x': 'com.twitter.android',
+    'facebook': 'com.facebook.katana',
+    'messenger': 'com.facebook.orca',
+    'snapchat': 'com.snapchat.android',
+    'tiktok': 'com.zhiliaoapp.musically',
+    'linkedin': 'com.linkedin.android',
+    'slack': 'com.Slack',
+    'discord': 'com.discord',
+    'zoom': 'us.zoom.videomeetings',
+    'teams': 'com.microsoft.teams',
+    'calendar': 'com.google.android.calendar',
+    'photos': 'com.google.android.apps.photos',
+    'drive': 'com.google.android.apps.docs',
+    'notes': 'com.google.android.keep',
+    'contacts': 'com.google.android.contacts',
+    'phone': 'com.google.android.dialer',
+    'messages': 'com.google.android.apps.messaging',
+  };
+
+  /// Automates any app using its name, converting to package name automatically
+  Future<ToolExecutionResult> _automateGenericApp(String appName, String action, Map<String, dynamic> params) async {
+    final packageName = _appPackageMap[appName.toLowerCase()] ?? appName;
+    return await _genericAppAction(packageName, action, params);
+  }
+
   Future<ToolExecutionResult> _genericAppAction(String packageName, String action, Map<String, dynamic> params) async {
     try {
       // Open the app

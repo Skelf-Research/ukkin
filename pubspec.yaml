@@ -11,6 +11,14 @@ dependencies:
     sdk: flutter
   agentlib:
     path: ../agentlib
+  llamafu:
+    path: /home/dipankar/Code/llamafu
+  sqflite: ^2.3.0
+  http: ^1.1.0
+  path_provider: ^2.1.0
+  webview_flutter: ^4.4.0
+  provider: ^6.1.0
+  html: ^0.15.4
 
 dev_dependencies:
   flutter_test:

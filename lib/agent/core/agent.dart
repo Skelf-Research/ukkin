@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'package:flutter/foundation.dart' show protected;
 import '../models/task.dart';
 import '../models/agent_message.dart';
 import '../tools/tool.dart';
@@ -35,6 +36,14 @@ abstract class Agent {
 class AutonomousAgent extends Agent {
   final StreamController<AgentMessage> _messageController = StreamController<AgentMessage>.broadcast();
   final StreamController<TaskResult> _taskResultController = StreamController<TaskResult>.broadcast();
+
+  /// Protected accessor for subclasses to add messages
+  @protected
+  StreamController<AgentMessage> get messageController => _messageController;
+
+  /// Protected accessor for subclasses to add task results
+  @protected
+  StreamController<TaskResult> get taskResultController => _taskResultController;
 
   bool _isRunning = false;
   String? _currentObjective;

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ukkin</string>
+    <string name="accessibility_service_description">Ukkin uses accessibility to automate tasks across apps on your behalf. This includes reading screen content, tapping buttons, and entering text to execute your agent workflows.</string>
+</resources>

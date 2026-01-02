@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 import '../core/agent.dart';
 import '../models/task.dart';
@@ -9,7 +8,7 @@ import '../models/agent_message.dart';
 import '../tools/tool.dart';
 import '../memory/memory_manager.dart';
 import '../llm/llm_interface.dart';
-import '../llm/fllama_adapter.dart';
+import '../llm/llamafu_adapter.dart';
 import 'mobile_controller.dart';
 import 'app_automation_tool.dart';
 import 'accessibility_service.dart';
@@ -54,7 +53,7 @@ class MobileAgent extends AutonomousAgent {
 
   @override
   Future<List<Task>> planTasks(String objective) async {
-    _messageController.add(AgentMessage(
+    messageController.add(AgentMessage(
       id: _generateId(),
       agentId: id,
       type: MessageType.status,
@@ -97,7 +96,7 @@ class MobileAgent extends AutonomousAgent {
       final response = await llm.generateResponse(planningPrompt);
       return _parseTasksFromResponse(response);
     } catch (e) {
-      _messageController.add(AgentMessage(
+      messageController.add(AgentMessage(
         id: _generateId(),
         agentId: id,
         type: MessageType.error,
@@ -110,7 +109,7 @@ class MobileAgent extends AutonomousAgent {
 
   @override
   Future<TaskResult> executeTask(Task task) async {
-    _messageController.add(AgentMessage(
+    messageController.add(AgentMessage(
       id: _generateId(),
       agentId: id,
       type: MessageType.status,
@@ -141,7 +140,7 @@ class MobileAgent extends AutonomousAgent {
       final toolResult = await tool.execute(task.parameters);
 
       if (toolResult.success) {
-        _messageController.add(AgentMessage(
+        messageController.add(AgentMessage(
           id: _generateId(),
           agentId: id,
           type: MessageType.status,
@@ -159,7 +158,7 @@ class MobileAgent extends AutonomousAgent {
         throw Exception(toolResult.error ?? "Task execution failed");
       }
     } catch (e) {
-      _messageController.add(AgentMessage(
+      messageController.add(AgentMessage(
         id: _generateId(),
         agentId: id,
         type: MessageType.error,
@@ -191,10 +190,8 @@ class MobileAgent extends AutonomousAgent {
       case 'phone_integration':
         return phoneIntegrations;
       default:
-        return tools.firstWhere(
-          (tool) => tool.canHandle(task),
-          orElse: () => null,
-        );
+        final matchingTool = tools.where((tool) => tool.canHandle(task));
+        return matchingTool.isNotEmpty ? matchingTool.first : null;
     }
   }
 
@@ -206,7 +203,7 @@ class MobileAgent extends AutonomousAgent {
 
   Future<void> startComplexWorkflow(String objective) async {
     try {
-      _messageController.add(AgentMessage(
+      messageController.add(AgentMessage(
         id: _generateId(),
         agentId: id,
         type: MessageType.status,
@@ -228,7 +225,7 @@ class MobileAgent extends AutonomousAgent {
         final workflowId = workflowResult.data['workflow_id'] as String;
         _currentWorkflowId = workflowId;
 
-        _messageController.add(AgentMessage(
+        messageController.add(AgentMessage(
           id: _generateId(),
           agentId: id,
           type: MessageType.status,
@@ -243,7 +240,7 @@ class MobileAgent extends AutonomousAgent {
         });
 
         if (executionResult.success) {
-          _messageController.add(AgentMessage(
+          messageController.add(AgentMessage(
             id: _generateId(),
             agentId: id,
             type: MessageType.status,
@@ -257,7 +254,7 @@ class MobileAgent extends AutonomousAgent {
         throw Exception("Failed to create workflow: ${workflowResult.error}");
       }
     } catch (e) {
-      _messageController.add(AgentMessage(
+      messageController.add(AgentMessage(
         id: _generateId(),
         agentId: id,
         type: MessageType.error,
@@ -298,7 +295,7 @@ class MobileAgent extends AutonomousAgent {
         statusMessage = "Workflow event: ${event.type.name}";
     }
 
-    _messageController.add(AgentMessage(
+    messageController.add(AgentMessage(
       id: _generateId(),
       agentId: id,
       type: messageType,
@@ -316,7 +313,7 @@ class MobileAgent extends AutonomousAgent {
   Future<void> enableLearningMode() async {
     _isLearningMode = true;
 
-    _messageController.add(AgentMessage(
+    messageController.add(AgentMessage(
       id: _generateId(),
       agentId: id,
       type: MessageType.learning,
@@ -332,7 +329,7 @@ class MobileAgent extends AutonomousAgent {
       await screenRecorder.execute({'action': 'stop_recording'});
     }
 
-    _messageController.add(AgentMessage(
+    messageController.add(AgentMessage(
       id: _generateId(),
       agentId: id,
       type: MessageType.learning,
@@ -342,7 +339,7 @@ class MobileAgent extends AutonomousAgent {
   }
 
   Future<AgentMessage> handleVoiceCommand(String voiceText) async {
-    _messageController.add(AgentMessage(
+    messageController.add(AgentMessage(
       id: _generateId(),
       agentId: id,
       type: MessageType.user,
@@ -478,7 +475,7 @@ class MobileAgent extends AutonomousAgent {
   }
 
   Future<void> setupRequiredPermissions() async {
-    _messageController.add(AgentMessage(
+    messageController.add(AgentMessage(
       id: _generateId(),
       agentId: id,
       type: MessageType.status,
@@ -489,7 +486,7 @@ class MobileAgent extends AutonomousAgent {
     try {
       // Check accessibility service
       if (!await accessibilityService.isServiceEnabled()) {
-        _messageController.add(AgentMessage(
+        messageController.add(AgentMessage(
           id: _generateId(),
           agentId: id,
           type: MessageType.status,
@@ -502,7 +499,7 @@ class MobileAgent extends AutonomousAgent {
 
       // Check screen recording permissions
       if (!await screenRecorder.hasPermissions()) {
-        _messageController.add(AgentMessage(
+        messageController.add(AgentMessage(
           id: _generateId(),
           agentId: id,
           type: MessageType.status,
@@ -521,7 +518,7 @@ class MobileAgent extends AutonomousAgent {
           .toList();
 
       if (missingPermissions.isNotEmpty) {
-        _messageController.add(AgentMessage(
+        messageController.add(AgentMessage(
           id: _generateId(),
           agentId: id,
           type: MessageType.status,
@@ -534,7 +531,7 @@ class MobileAgent extends AutonomousAgent {
         }
       }
 
-      _messageController.add(AgentMessage(
+      messageController.add(AgentMessage(
         id: _generateId(),
         agentId: id,
         type: MessageType.status,
@@ -542,7 +539,7 @@ class MobileAgent extends AutonomousAgent {
         timestamp: DateTime.now(),
       ));
     } catch (e) {
-      _messageController.add(AgentMessage(
+      messageController.add(AgentMessage(
         id: _generateId(),
         agentId: id,
         type: MessageType.error,
@@ -611,7 +608,7 @@ class MobileAgent extends AutonomousAgent {
     final memory = await MemoryManager.create(database);
 
     // Initialize LLM
-    final llm = FllamaLLMAdapter(modelPath: modelPath);
+    final llm = LlamafuLLMAdapter(modelPath: modelPath);
     await llm.initialize();
 
     // Create mobile tools

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -385,6 +384,23 @@ class AppWorkflow {
     required this.steps,
   });
 
+  factory AppWorkflow.fromJson(Map<String, dynamic> json) {
+    return AppWorkflow(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      steps: (json['steps'] as List<dynamic>?)
+              ?.map((s) => WorkflowStep.fromJson(s as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'steps': steps.map((s) => s.toJson()).toList(),
+      };
+
   void setStepResult(String stepId, Map<String, dynamic> result) {
     _stepResults[stepId] = result;
   }
@@ -408,6 +424,24 @@ class WorkflowStep {
     required this.parameters,
     this.required = true,
   });
+
+  factory WorkflowStep.fromJson(Map<String, dynamic> json) {
+    return WorkflowStep(
+      id: json['id'] as String,
+      appId: json['appId'] as String,
+      action: json['action'] as String,
+      parameters: (json['parameters'] as Map<String, dynamic>?) ?? {},
+      required: json['required'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'appId': appId,
+        'action': action,
+        'parameters': parameters,
+        'required': required,
+      };
 }
 
 class AppSuggestion {

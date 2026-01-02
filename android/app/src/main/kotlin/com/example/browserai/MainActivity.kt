@@ -12,5 +12,8 @@ class MainActivity: FlutterActivity() {
 
         // Register the performance optimizer plugin
         flutterEngine.plugins.add(PerformanceOptimizerPlugin())
+
+        // Register the automation plugin for accessibility service
+        flutterEngine.plugins.add(AutomationPlugin())
     }
 }

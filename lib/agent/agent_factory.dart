@@ -3,17 +3,14 @@ import 'package:sqflite/sqflite.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'core/agent.dart';
-import 'models/task.dart';
-import 'models/agent_message.dart';
 import 'tools/tool.dart';
 import 'tools/web_browser_tool.dart';
 import 'tools/search_tool.dart';
 import 'tools/vision_tool.dart';
 import 'memory/memory_manager.dart';
 import 'llm/llm_interface.dart';
-import 'llm/fllama_adapter.dart';
+import 'llm/llamafu_adapter.dart';
 import 'coordination/agent_coordinator.dart';
-import 'planning/task_planner.dart';
 
 class AgentFactory {
   final Database database;
@@ -33,7 +30,7 @@ class AgentFactory {
     final memory = await MemoryManager.create(database);
 
     // Initialize LLM
-    final llm = FllamaLLMAdapter(
+    final llm = LlamafuLLMAdapter(
       modelPath: modelPath ?? '$modelsPath/stablelm-2-zephyr-1_6b-q4_0.gguf',
     );
     await llm.initialize();
@@ -63,7 +60,7 @@ class AgentFactory {
     final memory = await MemoryManager.create(database);
 
     // Initialize LLM
-    final llm = FllamaLLMAdapter(
+    final llm = LlamafuLLMAdapter(
       modelPath: modelPath ?? '$modelsPath/stablelm-2-zephyr-1_6b-q4_0.gguf',
     );
     await llm.initialize();
@@ -95,7 +92,7 @@ class AgentFactory {
     final memory = await MemoryManager.create(database);
 
     // Initialize LLM
-    final llm = FllamaLLMAdapter(
+    final llm = LlamafuLLMAdapter(
       modelPath: modelPath ?? '$modelsPath/stablelm-2-zephyr-1_6b-q4_0.gguf',
     );
     await llm.initialize();
@@ -127,7 +124,7 @@ class AgentFactory {
     final memory = await MemoryManager.create(database);
 
     // Initialize LLM
-    final llm = FllamaLLMAdapter(
+    final llm = LlamafuLLMAdapter(
       modelPath: modelPath ?? '$modelsPath/stablelm-2-zephyr-1_6b-q4_0.gguf',
     );
     await llm.initialize();
@@ -135,7 +132,7 @@ class AgentFactory {
     // Initialize VLM if available
     VLMInterface? vlm;
     if (vlmModelPath != null && await File(vlmModelPath).exists()) {
-      vlm = FllamaVLMAdapter(modelPath: vlmModelPath);
+      vlm = LlamafuVLMAdapter(modelPath: vlmModelPath, mmprojPath: vlmModelPath);
       await vlm.initialize();
     }
 

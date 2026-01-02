@@ -1,16 +1,18 @@
-import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:duckduckgo_search/duckduckgo_search.dart';
+import 'package:html/parser.dart' as html_parser;
 import 'tool.dart';
 import '../models/task.dart';
 
+/// Safe search levels for web searches
+enum SafeSearch { strict, moderate, off }
+
+/// Time range filter for searches
+enum Time { day, week, month, year }
+
 class SearchTool extends Tool with ToolValidation {
   final http.Client _httpClient;
-  final DDGSearch _duckDuckGo;
 
-  SearchTool() :
-    _httpClient = http.Client(),
-    _duckDuckGo = DDGSearch();
+  SearchTool() : _httpClient = http.Client();
 
   @override
   String get name => 'search';
@@ -75,30 +77,77 @@ class SearchTool extends Tool with ToolValidation {
     String safeSearch,
   ) async {
     try {
-      final results = await _duckDuckGo.search(
-        query,
-        region: region ?? 'us-en',
-        safesearch: _mapSafeSearch(safeSearch),
-        time: _mapTimeRange(timeRange),
-        maxResults: maxResults,
+      // Use DuckDuckGo HTML search (privacy-respecting, no API key needed)
+      final url = Uri.parse('https://html.duckduckgo.com/html/').replace(
+        queryParameters: {
+          'q': query,
+          'kl': region ?? 'us-en',
+          'kp': _mapSafeSearchParam(safeSearch),
+          if (timeRange != null) 'df': _mapTimeRangeParam(timeRange),
+        },
       );
 
-      final searchResults = results.map((result) => {
-        'title': result.title,
-        'url': result.href,
-        'description': result.body,
-        'source': 'DuckDuckGo',
-      }).toList();
-
-      return ToolExecutionResult.success({
-        'query': query,
-        'engine': 'duckduckgo',
-        'results': searchResults,
-        'count': searchResults.length,
-        'timestamp': DateTime.now().toIso8601String(),
+      final response = await _httpClient.get(url, headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; UkkinBot/1.0)',
       });
+
+      if (response.statusCode == 200) {
+        final searchResults = _parseDuckDuckGoResults(response.body, maxResults);
+        return ToolExecutionResult.success({
+          'query': query,
+          'engine': 'duckduckgo',
+          'results': searchResults,
+          'count': searchResults.length,
+          'timestamp': DateTime.now().toIso8601String(),
+        });
+      } else {
+        return ToolExecutionResult.failure('DuckDuckGo search HTTP error: ${response.statusCode}');
+      }
     } catch (e) {
       return ToolExecutionResult.failure('DuckDuckGo search failed: $e');
+    }
+  }
+
+  List<Map<String, String>> _parseDuckDuckGoResults(String html, int maxResults) {
+    final results = <Map<String, String>>[];
+    final document = html_parser.parse(html);
+
+    // Parse DuckDuckGo HTML results
+    final resultElements = document.querySelectorAll('.result');
+    for (final element in resultElements) {
+      if (results.length >= maxResults) break;
+
+      final titleElement = element.querySelector('.result__title a');
+      final snippetElement = element.querySelector('.result__snippet');
+
+      if (titleElement != null) {
+        results.add({
+          'title': titleElement.text.trim(),
+          'url': titleElement.attributes['href'] ?? '',
+          'description': snippetElement?.text.trim() ?? '',
+          'source': 'DuckDuckGo',
+        });
+      }
+    }
+    return results;
+  }
+
+  String _mapSafeSearchParam(String safeSearch) {
+    switch (safeSearch.toLowerCase()) {
+      case 'strict': return '1';
+      case 'off': return '-1';
+      default: return '-2'; // moderate
+    }
+  }
+
+  String? _mapTimeRangeParam(String? timeRange) {
+    if (timeRange == null) return null;
+    switch (timeRange.toLowerCase()) {
+      case 'day': return 'd';
+      case 'week': return 'w';
+      case 'month': return 'm';
+      case 'year': return 'y';
+      default: return null;
     }
   }
 
@@ -164,114 +213,100 @@ class SearchTool extends Tool with ToolValidation {
   }
 
   Future<ToolExecutionResult> searchImages(String query, {int maxResults = 10}) async {
-    try {
-      final results = await _duckDuckGo.images(
-        query,
-        region: 'us-en',
-        safesearch: SafeSearch.moderate,
-        maxResults: maxResults,
-      );
-
-      final imageResults = results.map((result) => {
-        'title': result.title,
-        'image_url': result.image,
-        'thumbnail_url': result.thumbnail,
-        'source_url': result.url,
-        'width': result.width,
-        'height': result.height,
-        'source': 'DuckDuckGo Images',
-      }).toList();
-
-      return ToolExecutionResult.success({
-        'query': query,
-        'type': 'images',
-        'results': imageResults,
-        'count': imageResults.length,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      return ToolExecutionResult.failure('Image search failed: $e');
-    }
+    // Image search requires JavaScript rendering - return placeholder
+    // In production, consider using a headless browser or dedicated image search API
+    return ToolExecutionResult.success({
+      'query': query,
+      'type': 'images',
+      'results': <Map<String, dynamic>>[],
+      'count': 0,
+      'timestamp': DateTime.now().toIso8601String(),
+      'note': 'Image search requires JavaScript rendering - use web browser tool for images',
+    });
   }
 
   Future<ToolExecutionResult> searchNews(String query, {int maxResults = 10}) async {
+    // Use DuckDuckGo news search via HTTP
     try {
-      final results = await _duckDuckGo.news(
-        query,
-        region: 'us-en',
-        safesearch: SafeSearch.moderate,
-        time: Time.month,
-        maxResults: maxResults,
+      final url = Uri.parse('https://html.duckduckgo.com/html/').replace(
+        queryParameters: {
+          'q': '$query news',
+          'kl': 'us-en',
+          'df': 'm', // last month
+        },
       );
 
-      final newsResults = results.map((result) => {
-        'title': result.title,
-        'url': result.url,
-        'description': result.body,
-        'date': result.date,
-        'source': result.source,
-        'type': 'news',
-      }).toList();
-
-      return ToolExecutionResult.success({
-        'query': query,
-        'type': 'news',
-        'results': newsResults,
-        'count': newsResults.length,
-        'timestamp': DateTime.now().toIso8601String(),
+      final response = await _httpClient.get(url, headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; UkkinBot/1.0)',
       });
+
+      if (response.statusCode == 200) {
+        final newsResults = _parseDuckDuckGoResults(response.body, maxResults)
+            .map((r) => {...r, 'type': 'news'})
+            .toList();
+
+        return ToolExecutionResult.success({
+          'query': query,
+          'type': 'news',
+          'results': newsResults,
+          'count': newsResults.length,
+          'timestamp': DateTime.now().toIso8601String(),
+        });
+      } else {
+        return ToolExecutionResult.failure('News search HTTP error: ${response.statusCode}');
+      }
     } catch (e) {
       return ToolExecutionResult.failure('News search failed: $e');
     }
   }
 
-  SafeSearch _mapSafeSearch(String safeSearch) {
-    switch (safeSearch.toLowerCase()) {
-      case 'strict':
-        return SafeSearch.strict;
-      case 'off':
-        return SafeSearch.off;
-      default:
-        return SafeSearch.moderate;
-    }
-  }
-
-  Time? _mapTimeRange(String? timeRange) {
-    if (timeRange == null) return null;
-    switch (timeRange.toLowerCase()) {
-      case 'day':
-        return Time.day;
-      case 'week':
-        return Time.week;
-      case 'month':
-        return Time.month;
-      case 'year':
-        return Time.year;
-      default:
-        return null;
-    }
-  }
-
   List<Map<String, String>> _parseBingResults(String html, int maxResults) {
-    // Basic HTML parsing for Bing results
-    // In production, consider using a proper HTML parser
     final results = <Map<String, String>>[];
+    final document = html_parser.parse(html);
 
-    // This is a simplified parser - would need proper implementation
-    // for production use with html package
+    // Parse Bing search results
+    final resultElements = document.querySelectorAll('.b_algo');
+    for (final element in resultElements) {
+      if (results.length >= maxResults) break;
 
-    return results.take(maxResults).toList();
+      final titleElement = element.querySelector('h2 a');
+      final snippetElement = element.querySelector('.b_caption p');
+
+      if (titleElement != null) {
+        results.add({
+          'title': titleElement.text.trim(),
+          'url': titleElement.attributes['href'] ?? '',
+          'description': snippetElement?.text.trim() ?? '',
+          'source': 'Bing',
+        });
+      }
+    }
+    return results;
   }
 
   List<Map<String, String>> _parseStartPageResults(String html, int maxResults) {
-    // Basic HTML parsing for StartPage results
-    // In production, consider using a proper HTML parser
     final results = <Map<String, String>>[];
+    final document = html_parser.parse(html);
 
-    // This is a simplified parser - would need proper implementation
-    // for production use with html package
+    // Parse StartPage search results
+    final resultElements = document.querySelectorAll('.w-gl__result');
+    for (final element in resultElements) {
+      if (results.length >= maxResults) break;
 
-    return results.take(maxResults).toList();
+      final titleElement = element.querySelector('.w-gl__result-title');
+      final snippetElement = element.querySelector('.w-gl__description');
+      final linkElement = element.querySelector('a');
+
+      if (titleElement != null) {
+        results.add({
+          'title': titleElement.text.trim(),
+          'url': linkElement?.attributes['href'] ?? '',
+          'description': snippetElement?.text.trim() ?? '',
+          'source': 'StartPage',
+        });
+      }
+    }
+    return results;
   }
 
   @override

@@ -332,7 +332,7 @@ class _ImageAnalysisWidgetState extends State<ImageAnalysisWidget>
 
           // Object detection overlay
           if (_detectedObjects.isNotEmpty) ...[
-            ...._detectedObjects.map((detection) => _buildDetectionOverlay(detection)),
+            ..._detectedObjects.map((detection) => _buildDetectionOverlay(detection)),
           ],
 
           // Controls overlay

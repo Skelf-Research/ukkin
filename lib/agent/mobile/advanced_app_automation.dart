@@ -1070,7 +1070,8 @@ class GmailLibrary extends AppWorkflowLibrary {
 
       // Confirm deletion if prompted
       try {
-        await accessibilityService.findAndClickButton('Delete', timeout: 1000);
+        await Future.delayed(Duration(milliseconds: 1000));
+        await accessibilityService.findAndClickButton('Delete');
       } catch (e) {
         // No confirmation needed
       }

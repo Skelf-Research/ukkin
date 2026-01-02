@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart' hide TimeOfDay;
 import 'package:flutter/material.dart' as flutter show TimeOfDay;
-import 'package:agentlib/agentlib.dart' hide TaskResult;
-import 'package:agentlib/src/agents/repetitive_task_agent.dart' show TaskResult;
+import 'package:agentlib/agentlib.dart';
+import 'package:agentlib/src/mobile/real_automation.dart';
 
 // Custom automation agent for conversational flows
 class CustomAutomationAgent extends RepetitiveTaskAgent {
@@ -42,21 +42,133 @@ class CustomAutomationAgent extends RepetitiveTaskAgent {
   List<String> get requiredApps => targetApps;
 
   @override
-  Future<TaskResult> executeRoutine() async {
+  Future<RepetitiveTaskResult> executeRoutine() async {
     try {
-      // Execute the custom steps defined in the conversation
-      for (final step in customSteps) {
-        // Implementation would depend on the specific step requirements
-        // For now, simulate step execution
-        await Future.delayed(const Duration(seconds: 1));
+      final automation = RealAutomation();
+
+      // Check if accessibility service is enabled
+      if (!await automation.isEnabled()) {
+        return RepetitiveTaskResult.failure('Accessibility service not enabled. Please enable it in Settings.');
       }
 
-      return TaskResult.success('Custom automation completed successfully', {
-        'steps_executed': customSteps.length,
-        'apps_targeted': targetApps.length,
+      final results = <String>[];
+      int stepsExecuted = 0;
+
+      // Execute each custom step
+      for (final step in customSteps) {
+        try {
+          // Launch target app if specified
+          if (step.app != null && step.app!.isNotEmpty) {
+            if (!await automation.launchApp(step.app!)) {
+              results.add('Failed to launch ${step.app}');
+              continue;
+            }
+            await Future.delayed(const Duration(seconds: 2));
+          }
+
+          // Execute based on step type
+          switch (step.type.toLowerCase()) {
+            case 'open':
+            case 'launch':
+              // Already launched above
+              results.add('Opened ${step.app ?? step.target}');
+              break;
+
+            case 'tap':
+            case 'click':
+              if (step.target != null) {
+                final success = await automation.tapOnText(step.target!);
+                results.add(success ? 'Tapped on "${step.target}"' : 'Could not find "${step.target}"');
+              }
+              break;
+
+            case 'type':
+            case 'input':
+              if (step.value != null) {
+                final success = await automation.typeText(step.value!);
+                results.add(success ? 'Typed text' : 'Failed to type');
+              }
+              break;
+
+            case 'scroll':
+              final direction = step.value ?? 'down';
+              await automation.scroll(direction);
+              results.add('Scrolled $direction');
+              break;
+
+            case 'wait':
+              final ms = int.tryParse(step.value ?? '1000') ?? 1000;
+              await Future.delayed(Duration(milliseconds: ms));
+              results.add('Waited ${ms}ms');
+              break;
+
+            case 'wait_for':
+              if (step.target != null) {
+                final found = await automation.waitForElement(step.target!, timeoutMs: 5000);
+                results.add(found ? 'Found "${step.target}"' : 'Timeout waiting for "${step.target}"');
+              }
+              break;
+
+            case 'extract':
+            case 'read':
+              final texts = await automation.extractAllText();
+              final combinedText = texts.join(' ');
+
+              // Check for keywords if specified
+              if (step.value != null && step.value!.isNotEmpty) {
+                final keywords = step.value!.split(',').map((k) => k.trim().toLowerCase()).toList();
+                for (final keyword in keywords) {
+                  if (combinedText.toLowerCase().contains(keyword)) {
+                    results.add('Found keyword: $keyword');
+                  }
+                }
+              } else {
+                results.add('Extracted ${texts.length} text elements');
+              }
+              break;
+
+            case 'back':
+              await automation.pressBack();
+              results.add('Pressed back');
+              break;
+
+            case 'home':
+              await automation.pressHome();
+              results.add('Pressed home');
+              break;
+
+            case 'save':
+            case 'bookmark':
+              // Try common save/bookmark patterns
+              final saved = await automation.tapOnText('Save') ||
+                           await automation.tapOnText('Bookmark');
+              results.add(saved ? 'Saved item' : 'Could not find save button');
+              break;
+
+            default:
+              results.add('Unknown step type: ${step.type}');
+          }
+
+          stepsExecuted++;
+
+          // Small delay between steps
+          await Future.delayed(const Duration(milliseconds: 500));
+
+        } catch (e) {
+          results.add('Step "${step.name}" failed: $e');
+        }
+      }
+
+      // Return home when done
+      await automation.pressHome();
+
+      return RepetitiveTaskResult.success('Custom automation completed', {
+        'steps_executed': stepsExecuted,
+        'total_steps': customSteps.length,
+        'results': results,
       });
     } catch (e) {
-      return TaskResult.failure('Custom automation failed: $e');
+      return RepetitiveTaskResult.failure('Custom automation failed: $e');
     }
   }
 
@@ -839,18 +951,31 @@ class _ConversationalAgentBuilderState extends State<ConversationalAgentBuilder>
     if (accounts.isEmpty) accounts = ['@competitor1', '@competitor2'];
     if (keywords.isEmpty) keywords = ['product launch', 'sale', 'discount'];
 
+    final mainApp = platforms.isNotEmpty ? platforms.first : 'com.instagram.android';
+
     return AgentFlowBuilder(
       name: 'Social Media Monitor',
       description: 'Monitors ${platforms.length} social media platforms for competitor activity',
       category: 'Social Media',
       steps: [
-        FlowStep('Open social media apps', 'Launch ${platforms.join(", ")}'),
-        FlowStep('Navigate to target accounts', 'Visit specified accounts: ${accounts.join(", ")}'),
-        FlowStep('Check for new posts', 'Compare with last check timestamp'),
-        FlowStep('Analyze content', 'Look for keywords: ${keywords.join(", ")}'),
-        FlowStep('Save relevant content', 'Screenshot or bookmark important posts'),
-        FlowStep('Track engagement metrics', 'Record likes, comments, shares'),
-        FlowStep('Send summary notification', 'Report findings to user'),
+        FlowStep('Open app', 'Launch ${platforms.join(", ")}',
+          type: 'open', app: mainApp),
+        FlowStep('Search accounts', 'Find target accounts',
+          type: 'tap', target: 'Search'),
+        FlowStep('Enter account name', 'Type account to find',
+          type: 'type', value: accounts.isNotEmpty ? accounts.first : '@competitor'),
+        FlowStep('Wait for results', 'Let search complete',
+          type: 'wait', value: '2000'),
+        FlowStep('Open profile', 'Tap on account result',
+          type: 'tap', target: accounts.isNotEmpty ? accounts.first : 'competitor'),
+        FlowStep('Check posts', 'Scroll through recent posts',
+          type: 'scroll', value: 'down'),
+        FlowStep('Extract content', 'Read post content for keywords',
+          type: 'extract', value: keywords.join(',')),
+        FlowStep('Save interesting', 'Bookmark posts with keywords',
+          type: 'save'),
+        FlowStep('Return home', 'Close app',
+          type: 'home'),
       ],
       schedule: AgentSchedule(
         interval: interval,
@@ -891,11 +1016,18 @@ class _ConversationalAgentBuilderState extends State<ConversationalAgentBuilder>
       description: 'Manages and organizes your messages and emails automatically',
       category: 'Communication',
       steps: [
-        FlowStep('Check new messages', 'Scan for unread emails, WhatsApp, SMS'),
-        FlowStep('Analyze sender importance', 'Categorize by priority and relationship'),
-        FlowStep('Auto-organize content', 'Sort into folders, mark important'),
-        FlowStep('Generate auto-replies', 'Send appropriate responses when needed'),
-        FlowStep('Update user dashboard', 'Show summary of important messages'),
+        FlowStep('Open email app', 'Launch Gmail',
+          type: 'open', app: apps.isNotEmpty ? apps.first : 'com.google.android.gm'),
+        FlowStep('Check inbox', 'Navigate to inbox',
+          type: 'tap', target: 'Inbox'),
+        FlowStep('Wait for load', 'Let emails load',
+          type: 'wait', value: '2000'),
+        FlowStep('Read emails', 'Extract email content',
+          type: 'extract', value: 'unread,important,urgent'),
+        FlowStep('Scroll for more', 'Check more emails',
+          type: 'scroll', value: 'down'),
+        FlowStep('Return home', 'Close app',
+          type: 'home'),
       ],
       schedule: AgentSchedule(
         interval: interval,
@@ -933,17 +1065,28 @@ class _ConversationalAgentBuilderState extends State<ConversationalAgentBuilder>
 
     if (products.isEmpty) products = ['electronics', 'deals'];
 
+    final mainApp = apps.isNotEmpty ? apps.first : 'com.amazon.mShop.android.shopping';
+    final firstProduct = products.isNotEmpty ? products.first : 'product';
+
     return AgentFlowBuilder(
       name: 'Smart Shopping Assistant',
       description: 'Tracks prices and finds deals for products you want',
       category: 'Shopping',
       steps: [
-        FlowStep('Open shopping apps', 'Launch ${apps.isEmpty ? "shopping" : apps.join(", ")} apps'),
-        FlowStep('Search for tracked products', 'Check prices for: ${products.join(", ")}'),
-        FlowStep('Compare with saved prices', 'Detect price drops and increases'),
-        FlowStep('Check deals and offers', 'Look for discounts and special offers'),
-        FlowStep('Verify budget constraints', 'Ensure purchases fit within \$${budget.toInt()} budget'),
-        FlowStep('Send price alerts', 'Notify about significant price changes'),
+        FlowStep('Open shopping app', 'Launch ${apps.isEmpty ? "Amazon" : apps.join(", ")}',
+          type: 'open', app: mainApp),
+        FlowStep('Search for product', 'Find tracked item',
+          type: 'tap', target: 'Search'),
+        FlowStep('Enter product name', 'Type product to find',
+          type: 'type', value: firstProduct),
+        FlowStep('Wait for results', 'Let search complete',
+          type: 'wait', value: '2000'),
+        FlowStep('View product', 'Scroll to see details',
+          type: 'scroll', value: 'down'),
+        FlowStep('Extract price', 'Read current price',
+          type: 'extract', value: '₹,\$,price,stock,available'),
+        FlowStep('Return home', 'Close app',
+          type: 'home'),
       ],
       schedule: AgentSchedule(
         interval: const Duration(hours: 6),
@@ -967,10 +1110,12 @@ class _ConversationalAgentBuilderState extends State<ConversationalAgentBuilder>
       description: 'Custom agent based on your specific requirements',
       category: 'Custom',
       steps: [
-        FlowStep('Initialize agent', 'Set up custom automation based on user requirements'),
-        FlowStep('Execute main task', 'Perform the primary automation function'),
-        FlowStep('Monitor results', 'Check for successful completion'),
-        FlowStep('Report status', 'Send notification with results'),
+        FlowStep('Start automation', 'Initialize custom workflow',
+          type: 'wait', value: '1000'),
+        FlowStep('Execute main task', 'Perform the primary automation',
+          type: 'extract', value: 'status,result,complete'),
+        FlowStep('Complete', 'Finish automation',
+          type: 'home'),
       ],
       schedule: AgentSchedule(
         interval: const Duration(hours: 4),
@@ -1575,8 +1720,21 @@ class AgentFlowBuilder {
 class FlowStep {
   final String title;
   final String description;
+  final String type; // open, tap, type, scroll, wait, wait_for, extract, back, home, save
+  final String? app; // Package name of target app
+  final String? target; // Element to find/tap (text or description)
+  final String? value; // Value for type actions or keywords for extract
 
-  FlowStep(this.title, this.description);
+  FlowStep(
+    this.title,
+    this.description, {
+    this.type = 'tap',
+    this.app,
+    this.target,
+    this.value,
+  });
+
+  String get name => title;
 }
 
 class AgentSchedule {

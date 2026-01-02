@@ -9,6 +9,8 @@ abstract class LLMInterface {
 }
 
 abstract class VLMInterface {
+  Future<void> initialize();
+  Future<String> generateResponse(String prompt, {String? imagePath, Map<String, dynamic>? parameters});
   Future<String> analyzeImage(String imagePath, {String? prompt});
   Future<String> describeImage(String imagePath);
   Future<List<String>> extractText(String imagePath);

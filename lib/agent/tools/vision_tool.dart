@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'tool.dart';
 import '../models/task.dart';
@@ -333,7 +332,8 @@ class VisionTool extends Tool with ToolValidation {
   }
 
   Future<bool> isVLMReady() async {
-    return vlm?.isReady() ?? false;
+    if (vlm == null) return false;
+    return await vlm!.isReady();
   }
 
   Future<List<String>> getSupportedImageFormats() async {

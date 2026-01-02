@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:agentlib/agentlib.dart';
+import 'package:agentlib/agentlib.dart' hide AgentChatInterface;
 import 'ui/agent_dashboard.dart';
+import 'agent/ui/agent_chat_interface.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

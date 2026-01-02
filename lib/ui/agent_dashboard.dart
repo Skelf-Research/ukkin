@@ -319,7 +319,7 @@ class _AgentDashboardState extends State<AgentDashboard> with TickerProviderStat
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          agent.description,
+                          'Automated ${agent.name.toLowerCase()} tasks',
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],

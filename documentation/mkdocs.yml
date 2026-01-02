@@ -1,0 +1,85 @@
+site_name: Ukkin - AI Mobile Agent
+site_description: Create personal AI agents that automate tasks on your phone
+site_author: Ukkin Team
+site_url: https://ukkin.dev
+
+repo_name: ukkin
+repo_url: https://github.com/ukkin/ukkin
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+      - Permissions: getting-started/permissions.md
+  - Agents:
+      - Overview: agents/overview.md
+      - Social Media Agents: agents/social-media.md
+      - Communication Agents: agents/communication.md
+      - Shopping Agents: agents/shopping.md
+      - Custom Agents: agents/custom.md
+  - Features:
+      - Chat Interface: features/chat-interface.md
+      - Agent Dashboard: features/dashboard.md
+      - Workflows: features/workflows.md
+      - Autonomous Mode: features/autonomous-mode.md
+  - Configuration:
+      - Settings Overview: configuration/settings.md
+      - Model Settings: configuration/model.md
+      - Automation Settings: configuration/automation.md
+  - Security & Privacy:
+      - Privacy Overview: security/overview.md
+      - Data Protection: security/data-protection.md
+      - Permissions Guide: security/permissions.md
+  - Troubleshooting:
+      - FAQ: troubleshooting/faq.md
+      - Common Issues: troubleshooting/common-issues.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ukkin/ukkin

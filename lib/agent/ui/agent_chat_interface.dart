@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../core/agent.dart';
 import '../models/agent_message.dart';
 import '../models/task.dart';
 import '../coordination/agent_coordinator.dart';
 
 class AgentChatInterface extends StatefulWidget {
-  final Agent agent;
+  final Agent? agent;
+  final String? agentId;
   final AgentCoordinator? coordinator;
 
   const AgentChatInterface({
     Key? key,
-    required this.agent,
+    this.agent,
+    this.agentId,
     this.coordinator,
-  }) : super(key: key);
+  }) : assert(agent != null || agentId != null, 'Either agent or agentId must be provided'),
+       super(key: key);
 
   @override
   _AgentChatInterfaceState createState() => _AgentChatInterfaceState();
@@ -25,41 +27,51 @@ class _AgentChatInterfaceState extends State<AgentChatInterface> {
   final List<AgentMessage> _messages = [];
   final List<TaskResult> _taskResults = [];
 
-  late Stream<AgentMessage> _messageStream;
-  late Stream<TaskResult> _taskStream;
-  late Stream<CoordinationEvent>? _coordinationStream;
+  Stream<AgentMessage>? _messageStream;
+  Stream<TaskResult>? _taskStream;
+  Stream<CoordinationEvent>? _coordinationStream;
 
   bool _isAutonomousMode = false;
   String? _currentObjective;
+  String? _activeAgentId;
 
   @override
   void initState() {
     super.initState();
-    _messageStream = widget.agent.messageStream;
-    _taskStream = widget.agent.taskResultStream;
-    _coordinationStream = widget.coordinator?.events;
 
-    // Listen to agent messages
-    _messageStream.listen((message) {
-      setState(() {
-        _messages.add(message);
+    // Get agent ID (either from agent or directly provided)
+    _activeAgentId = widget.agent?.id ?? widget.agentId;
+
+    if (widget.agent != null) {
+      // Using local agent with streams
+      _messageStream = widget.agent!.messageStream;
+      _taskStream = widget.agent!.taskResultStream;
+      _coordinationStream = widget.coordinator?.events;
+
+      // Listen to agent messages
+      _messageStream?.listen((message) {
+        setState(() {
+          _messages.add(message);
+        });
+        _scrollToBottom();
       });
-      _scrollToBottom();
-    });
 
-    // Listen to task results
-    _taskStream.listen((result) {
-      setState(() {
-        _taskResults.add(result);
+      // Listen to task results
+      _taskStream?.listen((result) {
+        setState(() {
+          _taskResults.add(result);
+        });
       });
-    });
 
-    // Listen to coordination events if coordinator is available
-    _coordinationStream?.listen((event) {
-      if (event.agentId == widget.agent.id) {
-        _handleCoordinationEvent(event);
-      }
-    });
+      // Listen to coordination events if coordinator is available
+      _coordinationStream?.listen((event) {
+        if (event.agentId == _activeAgentId) {
+          _handleCoordinationEvent(event);
+        }
+      });
+    }
+    // When using agentId only, the widget operates in a simpler mode
+    // without local agent streams (uses agentlib's MessageSystem instead)
   }
 
   @override
@@ -71,7 +83,7 @@ class _AgentChatInterfaceState extends State<AgentChatInterface> {
             Icon(_getAgentIcon()),
             SizedBox(width: 8),
             Expanded(
-              child: Text(widget.agent.name),
+              child: Text(widget.agent?.name ?? 'AI Assistant'),
             ),
             IconButton(
               icon: Icon(_isAutonomousMode ? Icons.pause : Icons.play_arrow),
@@ -307,7 +319,7 @@ class _AgentChatInterfaceState extends State<AgentChatInterface> {
       _showAutonomousModePrompt(text);
     } else {
       // Send regular message to agent
-      await widget.agent.processMessage(message);
+      await widget.agent?.processMessage(message);
     }
   }
 
@@ -326,7 +338,7 @@ class _AgentChatInterfaceState extends State<AgentChatInterface> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              widget.agent.processMessage(AgentMessage(
+              widget.agent?.processMessage(AgentMessage(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
                 agentId: 'user',
                 type: MessageType.user,
@@ -395,8 +407,9 @@ class _AgentChatInterfaceState extends State<AgentChatInterface> {
       _currentObjective = objective;
     });
 
-    if (widget.agent is AutonomousAgent) {
-      await (widget.agent as AutonomousAgent).start(objective);
+    final agent = widget.agent;
+    if (agent is AutonomousAgent) {
+      await agent.start(objective);
     }
   }
 
@@ -406,8 +419,9 @@ class _AgentChatInterfaceState extends State<AgentChatInterface> {
       _currentObjective = null;
     });
 
-    if (widget.agent is AutonomousAgent) {
-      await (widget.agent as AutonomousAgent).stop();
+    final agent = widget.agent;
+    if (agent is AutonomousAgent) {
+      await agent.stop();
     }
   }
 
@@ -470,7 +484,8 @@ class _AgentChatInterfaceState extends State<AgentChatInterface> {
   }
 
   void _showMemoryStats() async {
-    final stats = await widget.agent.memory.getMemoryStats();
+    if (widget.agent == null) return;
+    final stats = await widget.agent!.memory.getMemoryStats();
 
     showDialog(
       context: context,

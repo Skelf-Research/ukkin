@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'model_download_service.dart';
 import 'setup_screen.dart';
 import 'browser_home.dart';
 import 'package:sqflite/sqflite.dart';

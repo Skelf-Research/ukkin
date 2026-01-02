@@ -5,7 +5,7 @@ import 'model_download_service.dart';
 import 'package:sqflite/sqflite.dart';
 import 'web_view_model.dart';
 import 'llm_service.dart';
-import 'package:fllama/fllama.dart';
+import 'package:llamafu/llamafu.dart' as llamafu;
 
 class AIChatWindow extends StatefulWidget {
   final List<WebViewModel> tabs;
@@ -116,18 +116,18 @@ Future<String> _retrieveRelevantContext(String query) async {
 
     String relevantContext = await _retrieveRelevantContext(userMessage);
 
-    List<Message> chatHistory = _messages.map((msg) => 
-      Message(msg.isUser ? Role.user : Role.assistant, msg.text)
+    List<llamafu.ChatMessage> llamafuHistory = _messages.map((msg) =>
+      llamafu.ChatMessage(role: msg.isUser ? llamafu.Role.user : llamafu.Role.assistant, content: msg.text)
     ).toList();
 
-    chatHistory.insert(0, Message(Role.system, 'You are a helpful AI assistant integrated into a web browser. Use the following context to answer the user\'s question: $relevantContext'));
+    llamafuHistory.insert(0, llamafu.ChatMessage(role: llamafu.Role.system, content: 'You are a helpful AI assistant integrated into a web browser. Use the following context to answer the user\'s question: $relevantContext'));
 
     try {
       String response;
       if (_selectedModel == 'Local' && _llmService != null) {
-        response = await _llmService!.generateResponse(chatHistory);
+        response = await _llmService!.generateResponse(llamafuHistory);
       } else {
-        response = await _generateOpenAIResponse(chatHistory);
+        response = await _generateOpenAIResponse(llamafuHistory);
       }
       setState(() {
         _messages.add(ChatMessage(text: response, isUser: false));
@@ -147,7 +147,7 @@ Future<String> _retrieveRelevantContext(String query) async {
     _scrollToBottom();
   }
 
-  Future<String> _generateOpenAIResponse(List<Message> chatHistory) async {
+  Future<String> _generateOpenAIResponse(List<llamafu.ChatMessage> chatHistory) async {
     final apiKey = 'OPENAI_API_KEY';  // Replace with your actual API key
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
 
@@ -158,10 +158,10 @@ Future<String> _retrieveRelevantContext(String query) async {
         'Authorization': 'Bearer $apiKey',
       },
       body: jsonEncode({
-        'model': 'gpt-3.5-turbo',  // or your preferred model
+        'model': 'gpt-3.5-turbo',
         'messages': chatHistory.map((msg) => {
-          'role': msg.role.toString().split('.').last,
-          'content': msg.text,
+          'role': _chatRoleToString(msg.role),
+          'content': msg.content,
         }).toList(),
       }),
     );
@@ -171,6 +171,14 @@ Future<String> _retrieveRelevantContext(String query) async {
       return data['choices'][0]['message']['content'];
     } else {
       throw Exception('Failed to generate response from OpenAI');
+    }
+  }
+
+  String _chatRoleToString(llamafu.Role role) {
+    switch (role) {
+      case llamafu.Role.system: return 'system';
+      case llamafu.Role.user: return 'user';
+      case llamafu.Role.assistant: return 'assistant';
     }
   }
 

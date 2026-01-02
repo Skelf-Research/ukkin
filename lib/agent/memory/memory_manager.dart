@@ -1,16 +1,12 @@
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
-import 'package:sqlite_bm25/sqlite_bm25.dart';
 import '../models/agent_message.dart';
 import '../models/task.dart';
 
 class MemoryManager {
   final Database _database;
-  late final Bm25Extension _bm25;
 
-  MemoryManager(this._database) {
-    _bm25 = Bm25Extension(_database);
-  }
+  MemoryManager(this._database);
 
   static Future<MemoryManager> create(Database database) async {
     await _initializeTables(database);
